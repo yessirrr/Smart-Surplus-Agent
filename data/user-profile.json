@@ -1,0 +1,13 @@
+{
+  "name": "Fitsum Abraha",
+  "firstName": "Fitsum",
+  "age": 22,
+  "monthlyIncome": 2800,
+  "riskTolerance": "medium",
+  "investmentGoal": "Build long-term wealth through consistent TFSA contributions",
+  "currentHoldings": {
+    "tfsa": 1240.50,
+    "crypto": 310.00,
+    "cashBalance": 487.32
+  }
+}

@@ -1,0 +1,33 @@
+import type { Transaction } from "@/lib/types";
+import { CategoryIcon } from "./CategoryIcon";
+import { formatCurrency, formatDate } from "@/lib/utils";
+
+interface TransactionRowProps {
+  transaction: Transaction;
+}
+
+export function TransactionRow({ transaction }: TransactionRowProps) {
+  const isIncome = transaction.type === "income";
+
+  return (
+    <div className="flex items-center gap-3 py-3">
+      <CategoryIcon category={transaction.category} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-ws-charcoal truncate">
+          {transaction.description}
+        </p>
+        <p className="text-xs text-ws-grey">
+          {formatDate(transaction.date)}
+        </p>
+      </div>
+      <p
+        className={`text-sm font-bold tabular-nums whitespace-nowrap ${
+          isIncome ? "text-ws-green" : "text-ws-charcoal"
+        }`}
+      >
+        {isIncome ? "+" : "-"}
+        {formatCurrency(transaction.amount)}
+      </p>
+    </div>
+  );
+}
