@@ -60,67 +60,20 @@ export default function SurplusPage() {
 
   // Compute adjusted values based on selected habits
   const adjusted = useMemo(() => {
-    // Per-month chart data
-    const rawChartData = surplusSummary.periods.map((period) => {
+    const chartData = surplusSummary.periods.map((period) => {
       const month = period.periodStart.slice(0, 7);
       let selectedSpend = 0;
       for (const id of selectedHabitIds) {
         selectedSpend += habitMonthlySpend.get(id)?.get(month) ?? 0;
       }
-      const actualSurplus = Math.round(period.surplus);
-      const potentialSurplus = Math.round(period.surplus + selectedSpend);
+      const actual = Math.round(period.surplus);
+      const potential = Math.round(period.surplus + selectedSpend);
 
       return {
         month: formatMonthLabel(period.periodStart),
-        actualSurplus,
-        potentialSurplus,
-        actual: actualSurplus,
-        potential: potentialSurplus,
-      };
-    });
-
-    const chartData = rawChartData.map((point, index) => {
-      const prev = rawChartData[index - 1];
-      const next = rawChartData[index + 1];
-
-      const actualHasNegativeNeighbor =
-        (prev?.actualSurplus ?? 0) < 0 || (next?.actualSurplus ?? 0) < 0;
-      const actualHasPositiveNeighbor =
-        (prev?.actualSurplus ?? 0) > 0 || (next?.actualSurplus ?? 0) > 0;
-
-      const potentialHasNegativeNeighbor =
-        (prev?.potentialSurplus ?? 0) < 0 || (next?.potentialSurplus ?? 0) < 0;
-      const potentialHasPositiveNeighbor =
-        (prev?.potentialSurplus ?? 0) > 0 || (next?.potentialSurplus ?? 0) > 0;
-
-      let actualPositive: number | null =
-        point.actualSurplus >= 0 ? point.actualSurplus : null;
-      let actualNegative: number | null =
-        point.actualSurplus < 0 ? point.actualSurplus : null;
-      if (point.actualSurplus >= 0 && actualHasNegativeNeighbor) {
-        actualNegative = 0;
-      }
-      if (point.actualSurplus < 0 && actualHasPositiveNeighbor) {
-        actualPositive = 0;
-      }
-
-      let potentialPositive: number | null =
-        point.potentialSurplus >= 0 ? point.potentialSurplus : null;
-      let potentialNegative: number | null =
-        point.potentialSurplus < 0 ? point.potentialSurplus : null;
-      if (point.potentialSurplus >= 0 && potentialHasNegativeNeighbor) {
-        potentialNegative = 0;
-      }
-      if (point.potentialSurplus < 0 && potentialHasPositiveNeighbor) {
-        potentialPositive = 0;
-      }
-
-      return {
-        ...point,
-        actualPositive,
-        actualNegative,
-        potentialPositive,
-        potentialNegative,
+        actual,
+        potential,
+        actualNegative: actual < 0 ? actual : null,
       };
     });
 

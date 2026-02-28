@@ -13,14 +13,9 @@ import { formatCurrency } from "@/lib/utils";
 
 export interface ChartDataPoint {
   month: string;
-  actualSurplus: number;
-  potentialSurplus: number;
   actual: number;
   potential: number;
-  actualPositive: number | null;
   actualNegative: number | null;
-  potentialPositive: number | null;
-  potentialNegative: number | null;
 }
 
 interface SurplusHeroProps {
@@ -43,16 +38,6 @@ export function SurplusHero({
     delta > 0
       ? delta * ((Math.pow(1 + r / 12, n * 12) - 1) / (r / 12))
       : 0;
-
-  const allValues = chartData.flatMap((point) => [
-    point.actualSurplus,
-    point.potentialSurplus,
-  ]);
-  const maxValue = allValues.length > 0 ? Math.max(...allValues) : 0;
-  const minValue = allValues.length > 0 ? Math.min(...allValues) : 0;
-  const zeroOffset =
-    maxValue <= 0 ? 0 : minValue >= 0 ? 1 : maxValue / (maxValue - minValue);
-  const zeroPercent = `${zeroOffset * 100}%`;
 
   return (
     <div>
@@ -104,17 +89,17 @@ export function SurplusHero({
               margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
             >
               <defs>
-                <linearGradient id="actualStrokeGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgb(50,48,47)" />
-                  <stop offset={zeroPercent} stopColor="rgb(50,48,47)" />
-                  <stop offset={zeroPercent} stopColor="rgb(205,28,19)" />
-                  <stop offset="100%" stopColor="rgb(205,28,19)" />
+                <linearGradient id="fillActual" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgb(50,48,47)" stopOpacity={0.12} />
+                  <stop offset="100%" stopColor="rgb(50,48,47)" stopOpacity={0.02} />
                 </linearGradient>
-                <linearGradient id="potentialStrokeGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0b8a3e" />
-                  <stop offset={zeroPercent} stopColor="#0b8a3e" />
-                  <stop offset={zeroPercent} stopColor="rgb(205,28,19)" />
-                  <stop offset="100%" stopColor="rgb(205,28,19)" />
+                <linearGradient id="fillPotential" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#0b8a3e" stopOpacity={0.14} />
+                  <stop offset="100%" stopColor="#0b8a3e" stopOpacity={0.03} />
+                </linearGradient>
+                <linearGradient id="fillActualNegative" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgb(205,28,19)" stopOpacity={0.08} />
+                  <stop offset="100%" stopColor="rgb(205,28,19)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis
@@ -135,19 +120,25 @@ export function SurplusHero({
               <Tooltip content={<CustomTooltip />} />
               <Area
                 type="monotone"
-                dataKey="potentialSurplus"
-                stroke="url(#potentialStrokeGradient)"
+                dataKey="potential"
+                stroke="#0b8a3e"
                 strokeWidth={2}
                 strokeDasharray="6 3"
-                fill="none"
-                legendType="none"
+                fill="url(#fillPotential)"
               />
               <Area
                 type="monotone"
-                dataKey="actualSurplus"
-                stroke="url(#actualStrokeGradient)"
+                dataKey="actual"
+                stroke="rgb(50,48,47)"
                 strokeWidth={2}
-                fill="none"
+                fill="url(#fillActual)"
+              />
+              <Area
+                type="monotone"
+                dataKey="actualNegative"
+                baseValue={0}
+                stroke="none"
+                fill="url(#fillActualNegative)"
                 legendType="none"
               />
             </AreaChart>
@@ -165,10 +156,6 @@ export function SurplusHero({
             />
             <span className="text-[10px] text-ws-grey">Potential surplus</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-0.5 bg-ws-red rounded" />
-            <span className="text-[10px] text-ws-grey">Negative surplus</span>
-          </div>
         </div>
       </div>
     </div>
@@ -184,15 +171,15 @@ function CustomTooltip(props: {
   if (!active || !payload || payload.length === 0) return null;
 
   const actualValue =
-    typeof payload.find((entry) => entry.dataKey === "actualSurplus")?.value ===
+    typeof payload.find((entry) => entry.dataKey === "actual")?.value ===
     "number"
-      ? (payload.find((entry) => entry.dataKey === "actualSurplus")?.value as number)
+      ? (payload.find((entry) => entry.dataKey === "actual")?.value as number)
       : 0;
 
   const potentialValue =
-    typeof payload.find((entry) => entry.dataKey === "potentialSurplus")?.value ===
+    typeof payload.find((entry) => entry.dataKey === "potential")?.value ===
     "number"
-      ? (payload.find((entry) => entry.dataKey === "potentialSurplus")?.value as number)
+      ? (payload.find((entry) => entry.dataKey === "potential")?.value as number)
       : 0;
 
   const rows = [
