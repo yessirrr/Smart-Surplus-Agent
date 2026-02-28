@@ -1,6 +1,7 @@
 import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile } from "@/lib/types";
+import { analyzeTransactions } from "@/lib/domain";
 import { Header } from "@/components/Header";
 import { BalanceCard } from "@/components/BalanceCard";
 import { SpendInvestBreakdown } from "@/components/SpendInvestBreakdown";
@@ -11,6 +12,23 @@ import { TransactionList } from "@/components/TransactionList";
 export default function DashboardPage() {
   const profile = userProfile as UserProfile;
   const txns = transactions as Transaction[];
+
+  // TEMPORARY — remove after verification
+  const analysis = analyzeTransactions(
+    txns,
+    { frequency: "biweekly", dayOfWeek: "friday", amount: 2076 }
+  );
+
+  console.log("=== ODYSSEUS ENGINE VERIFICATION ===");
+  console.log(`Recurring patterns found: ${analysis.recurringPatterns.length}`);
+  console.log(`Habit candidates found: ${analysis.habitCandidates.length}`);
+  analysis.habitCandidates.forEach(h => {
+    console.log(`  → ${h.name}: ${h.metrics.monthlySpend.toFixed(2)}/mo, confidence: ${h.confidence.toFixed(2)}, yearly savings: ${h.suggestedGoal.potentialYearlySavings.toFixed(2)}`);
+  });
+  console.log(`Avg monthly surplus: ${analysis.surplusSummary.averageMonthlySurplus.toFixed(2)}`);
+  console.log(`Avg monthly POTENTIAL surplus: ${analysis.surplusSummary.averageMonthlyPotentialSurplus.toFixed(2)}`);
+  console.log(`Total habit spend (all time): ${analysis.surplusSummary.totalHabitSpend.toFixed(2)}`);
+  console.log("====================================");
 
   // Total balance across all accounts
   const totalBalance =

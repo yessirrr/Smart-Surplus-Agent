@@ -24,6 +24,10 @@ import {
   Plane,
   Sofa,
   Gift,
+  Zap,
+  Clapperboard,
+  Truck,
+  AlertTriangle,
 } from "lucide-react";
 import type { TransactionCategory } from "@/lib/types";
 import { CATEGORY_COLORS } from "@/lib/constants";
@@ -33,18 +37,24 @@ const iconMap: Record<
   React.ComponentType<{ size?: number; strokeWidth?: number }>
 > = {
   rent: Home,
+  utilities: Zap,
   groceries: ShoppingCart,
   transit: Bus,
   subscriptions: Tv,
   income: DollarSign,
   transfer: ArrowRightLeft,
   coffee: Coffee,
+  coffee_shops: Coffee,
   food_delivery: Bike,
   vaping: Cigarette,
   alcohol: Wine,
+  personal_vices: AlertTriangle,
   impulse_shopping: ShoppingBag,
+  shopping: ShoppingBag,
   dining_out: UtensilsCrossed,
+  entertainment: Clapperboard,
   rideshare: Car,
+  transportation: Truck,
   phone: Smartphone,
   internet: Wifi,
   gym: Dumbbell,
