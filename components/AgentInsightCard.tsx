@@ -34,12 +34,20 @@ export function AgentInsightCard({
         ))}
       </div>
 
-      <Link
-        href="/habits"
-        className="mt-4 block w-full text-center text-sm font-bold text-white bg-ws-charcoal rounded-[72px] py-3 hover:opacity-90 transition-opacity"
-      >
-        Set Up a Habit Goal
-      </Link>
+      <div className="flex gap-3 mt-4">
+        <Link
+          href="/habits"
+          className="flex-1 text-center text-sm font-bold text-white bg-ws-charcoal rounded-[72px] py-3 hover:opacity-90 transition-opacity"
+        >
+          Set Up a Habit Goal
+        </Link>
+        <Link
+          href="/surplus"
+          className="flex-1 text-center text-sm font-bold text-ws-charcoal bg-ws-light-grey rounded-[72px] py-3 hover:opacity-80 transition-opacity"
+        >
+          View Surplus Plan &rarr;
+        </Link>
+      </div>
     </div>
   );
 }
