@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import transactions from "@/data/transactions.json";
 import type { Transaction } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
-import { SurplusHero } from "@/components/surplus/SurplusHero";
+import { SurplusHero, formatMonthLabel } from "@/components/surplus/SurplusHero";
+import { HabitToggleBar } from "@/components/surplus/HabitToggleBar";
 import { SpendingBreakdown } from "@/components/surplus/SpendingBreakdown";
 import { AllocationPicker } from "@/components/surplus/AllocationPicker";
 
@@ -24,9 +25,119 @@ export default function SurplusPage() {
 
   const { surplusSummary, habitCandidates } = analysis;
 
-  const monthlySavings =
-    surplusSummary.averageMonthlyPotentialSurplus -
-    surplusSummary.averageMonthlySurplus;
+  // Habit toggle state - all selected by default
+  const [selectedHabitIds, setSelectedHabitIds] = useState<Set<string>>(
+    () => new Set(habitCandidates.map((h) => h.id))
+  );
+
+  const toggleHabit = useCallback((id: string) => {
+    setSelectedHabitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  // Pre-compute per-month spend for each habit (stable reference)
+  const habitMonthlySpend = useMemo(() => {
+    const result = new Map<string, Map<string, number>>();
+    for (const habit of habitCandidates) {
+      const txnIds = new Set(habit.transactionIds);
+      const monthSpend = new Map<string, number>();
+      for (const txn of txns) {
+        if (!txnIds.has(txn.id)) continue;
+        const month = txn.date.slice(0, 7);
+        monthSpend.set(month, (monthSpend.get(month) ?? 0) + Math.abs(txn.amount));
+      }
+      result.set(habit.id, monthSpend);
+    }
+    return result;
+  }, [habitCandidates, txns]);
+
+  // Compute adjusted values based on selected habits
+  const adjusted = useMemo(() => {
+    // Per-month chart data
+    const rawChartData = surplusSummary.periods.map((period) => {
+      const month = period.periodStart.slice(0, 7);
+      let selectedSpend = 0;
+      for (const id of selectedHabitIds) {
+        selectedSpend += habitMonthlySpend.get(id)?.get(month) ?? 0;
+      }
+      const actualSurplus = Math.round(period.surplus);
+      const potentialSurplus = Math.round(period.surplus + selectedSpend);
+
+      return {
+        month: formatMonthLabel(period.periodStart),
+        actualSurplus,
+        potentialSurplus,
+        actual: actualSurplus,
+        potential: potentialSurplus,
+      };
+    });
+
+    const chartData = rawChartData.map((point, index) => {
+      const prev = rawChartData[index - 1];
+      const next = rawChartData[index + 1];
+
+      const actualHasNegativeNeighbor =
+        (prev?.actualSurplus ?? 0) < 0 || (next?.actualSurplus ?? 0) < 0;
+      const actualHasPositiveNeighbor =
+        (prev?.actualSurplus ?? 0) > 0 || (next?.actualSurplus ?? 0) > 0;
+
+      const potentialHasNegativeNeighbor =
+        (prev?.potentialSurplus ?? 0) < 0 || (next?.potentialSurplus ?? 0) < 0;
+      const potentialHasPositiveNeighbor =
+        (prev?.potentialSurplus ?? 0) > 0 || (next?.potentialSurplus ?? 0) > 0;
+
+      let actualPositive: number | null =
+        point.actualSurplus >= 0 ? point.actualSurplus : null;
+      let actualNegative: number | null =
+        point.actualSurplus < 0 ? point.actualSurplus : null;
+      if (point.actualSurplus >= 0 && actualHasNegativeNeighbor) {
+        actualNegative = 0;
+      }
+      if (point.actualSurplus < 0 && actualHasPositiveNeighbor) {
+        actualPositive = 0;
+      }
+
+      let potentialPositive: number | null =
+        point.potentialSurplus >= 0 ? point.potentialSurplus : null;
+      let potentialNegative: number | null =
+        point.potentialSurplus < 0 ? point.potentialSurplus : null;
+      if (point.potentialSurplus >= 0 && potentialHasNegativeNeighbor) {
+        potentialNegative = 0;
+      }
+      if (point.potentialSurplus < 0 && potentialHasPositiveNeighbor) {
+        potentialPositive = 0;
+      }
+
+      return {
+        ...point,
+        actualPositive,
+        actualNegative,
+        potentialPositive,
+        potentialNegative,
+      };
+    });
+
+    // Adjusted average potential
+    const selectedHabits = habitCandidates.filter((h) =>
+      selectedHabitIds.has(h.id)
+    );
+    const totalSelectedMonthly = selectedHabits.reduce(
+      (s, h) => s + h.metrics.monthlySpend,
+      0
+    );
+    const adjustedPotential =
+      surplusSummary.averageMonthlySurplus + totalSelectedMonthly;
+    const monthlySavings = totalSelectedMonthly;
+
+    return { chartData, adjustedPotential, monthlySavings };
+  }, [selectedHabitIds, surplusSummary, habitCandidates, habitMonthlySpend]);
 
   return (
     <div className="min-h-screen bg-ws-off-white">
@@ -47,7 +158,20 @@ export default function SurplusPage() {
 
         {/* Section 1: Surplus Overview */}
         <div className="mt-6">
-          <SurplusHero summary={surplusSummary} />
+          <SurplusHero
+            actualSurplus={surplusSummary.averageMonthlySurplus}
+            adjustedPotentialSurplus={adjusted.adjustedPotential}
+            chartData={adjusted.chartData}
+          />
+        </div>
+
+        {/* Habit toggles */}
+        <div className="mt-4">
+          <HabitToggleBar
+            habits={habitCandidates}
+            selectedIds={selectedHabitIds}
+            onToggle={toggleHabit}
+          />
         </div>
 
         {/* Section 2: Spending Breakdown */}
@@ -60,7 +184,7 @@ export default function SurplusPage() {
 
         {/* Section 3: Allocation Picker */}
         <div className="mt-8 pb-12">
-          <AllocationPicker monthlySavings={monthlySavings} />
+          <AllocationPicker monthlySavings={adjusted.monthlySavings} />
         </div>
       </div>
     </div>

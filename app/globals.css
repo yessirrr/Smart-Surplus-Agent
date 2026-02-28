@@ -33,6 +33,34 @@
     "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
+/* ---- Step Transitions ---- */
+@keyframes step-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes step-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.step-forward {
+  animation: step-in-right 300ms ease-out;
+}
+
+.step-backward {
+  animation: step-in-left 300ms ease-out;
+}
+
+/* Hide scrollbar for habit toggle bar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* ---- Base Styles ---- */
 body {
   color: var(--color-primary-text);

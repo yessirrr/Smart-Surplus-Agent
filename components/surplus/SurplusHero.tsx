@@ -7,34 +7,52 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
-import type { SurplusSummary } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
-interface SurplusHeroProps {
-  summary: SurplusSummary;
+export interface ChartDataPoint {
+  month: string;
+  actualSurplus: number;
+  potentialSurplus: number;
+  actual: number;
+  potential: number;
+  actualPositive: number | null;
+  actualNegative: number | null;
+  potentialPositive: number | null;
+  potentialNegative: number | null;
 }
 
-export function SurplusHero({ summary }: SurplusHeroProps) {
-  const actual = summary.averageMonthlySurplus;
-  const potential = summary.averageMonthlyPotentialSurplus;
-  const delta = potential - actual;
+interface SurplusHeroProps {
+  actualSurplus: number;
+  adjustedPotentialSurplus: number;
+  chartData: ChartDataPoint[];
+}
 
-  // 5-year compound growth: FV = PMT × ((1 + r/12)^(n*12) - 1) / (r/12)
+export function SurplusHero({
+  actualSurplus,
+  adjustedPotentialSurplus,
+  chartData,
+}: SurplusHeroProps) {
+  const delta = adjustedPotentialSurplus - actualSurplus;
+
+  // 5-year compound growth: FV = PMT * ((1 + r/12)^(n*12) - 1) / (r/12)
   const r = 0.07;
   const n = 5;
   const fv =
-    delta * ((Math.pow(1 + r / 12, n * 12) - 1) / (r / 12));
+    delta > 0
+      ? delta * ((Math.pow(1 + r / 12, n * 12) - 1) / (r / 12))
+      : 0;
 
-  // Chart data from periods
-  const chartData = summary.periods.map((p) => {
-    const label = formatMonthLabel(p.periodStart);
-    return {
-      month: label,
-      actual: Math.round(p.surplus),
-      potential: Math.round(p.potentialSurplus),
-    };
-  });
+  const allValues = chartData.flatMap((point) => [
+    point.actualSurplus,
+    point.potentialSurplus,
+  ]);
+  const maxValue = allValues.length > 0 ? Math.max(...allValues) : 0;
+  const minValue = allValues.length > 0 ? Math.min(...allValues) : 0;
+  const zeroOffset =
+    maxValue <= 0 ? 0 : minValue >= 0 ? 1 : maxValue / (maxValue - minValue);
+  const zeroPercent = `${zeroOffset * 100}%`;
 
   return (
     <div>
@@ -46,7 +64,7 @@ export function SurplusHero({ summary }: SurplusHeroProps) {
               Current Monthly Surplus
             </p>
             <p className="text-2xl font-bold text-ws-charcoal mt-1">
-              {formatCurrency(actual)}
+              {formatCurrency(actualSurplus)}
             </p>
           </div>
           <div>
@@ -54,7 +72,7 @@ export function SurplusHero({ summary }: SurplusHeroProps) {
               Potential Monthly Surplus
             </p>
             <p className="text-3xl font-bold text-ws-green mt-1">
-              {formatCurrency(potential)}
+              {formatCurrency(adjustedPotentialSurplus)}
             </p>
           </div>
         </div>
@@ -77,7 +95,7 @@ export function SurplusHero({ summary }: SurplusHeroProps) {
       {/* Trend chart */}
       <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-6 mt-4">
         <p className="text-xs text-ws-grey uppercase tracking-wide mb-4">
-          Monthly Surplus — 24 Months
+          Monthly Surplus - 24 Months
         </p>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
@@ -86,13 +104,17 @@ export function SurplusHero({ summary }: SurplusHeroProps) {
               margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
             >
               <defs>
-                <linearGradient id="fillPotential" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0b8a3e" stopOpacity={0.15} />
-                  <stop offset="100%" stopColor="#0b8a3e" stopOpacity={0} />
+                <linearGradient id="actualStrokeGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgb(50,48,47)" />
+                  <stop offset={zeroPercent} stopColor="rgb(50,48,47)" />
+                  <stop offset={zeroPercent} stopColor="rgb(205,28,19)" />
+                  <stop offset="100%" stopColor="rgb(205,28,19)" />
                 </linearGradient>
-                <linearGradient id="fillActual" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgb(50,48,47)" stopOpacity={0.1} />
-                  <stop offset="100%" stopColor="rgb(50,48,47)" stopOpacity={0} />
+                <linearGradient id="potentialStrokeGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#0b8a3e" />
+                  <stop offset={zeroPercent} stopColor="#0b8a3e" />
+                  <stop offset={zeroPercent} stopColor="rgb(205,28,19)" />
+                  <stop offset="100%" stopColor="rgb(205,28,19)" />
                 </linearGradient>
               </defs>
               <XAxis
@@ -109,32 +131,24 @@ export function SurplusHero({ summary }: SurplusHeroProps) {
                 tickFormatter={(v: number) => `$${v}`}
                 width={50}
               />
-              <Tooltip
-                contentStyle={{
-                  fontSize: 12,
-                  borderRadius: 8,
-                  border: "1px solid rgba(0,0,0,0.08)",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                }}
-                formatter={((value: number | undefined, name: string | undefined) => [
-                  formatCurrency(value ?? 0),
-                  name === "potential" ? "Potential" : "Actual",
-                ]) as never}
-              />
+              <ReferenceLine y={0} stroke="var(--ws-border)" />
+              <Tooltip content={<CustomTooltip />} />
               <Area
                 type="monotone"
-                dataKey="potential"
-                stroke="#0b8a3e"
+                dataKey="potentialSurplus"
+                stroke="url(#potentialStrokeGradient)"
                 strokeWidth={2}
                 strokeDasharray="6 3"
-                fill="url(#fillPotential)"
+                fill="none"
+                legendType="none"
               />
               <Area
                 type="monotone"
-                dataKey="actual"
-                stroke="rgb(50,48,47)"
+                dataKey="actualSurplus"
+                stroke="url(#actualStrokeGradient)"
                 strokeWidth={2}
-                fill="url(#fillActual)"
+                fill="none"
+                legendType="none"
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -145,8 +159,15 @@ export function SurplusHero({ summary }: SurplusHeroProps) {
             <span className="text-[10px] text-ws-grey">Actual surplus</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-0.5 bg-ws-green rounded border-dashed" style={{ borderTop: "2px dashed #0b8a3e", height: 0 }} />
+            <div
+              className="w-3 h-0.5 rounded"
+              style={{ borderTop: "2px dashed #0b8a3e", height: 0 }}
+            />
             <span className="text-[10px] text-ws-grey">Potential surplus</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-0.5 bg-ws-red rounded" />
+            <span className="text-[10px] text-ws-grey">Negative surplus</span>
           </div>
         </div>
       </div>
@@ -154,9 +175,72 @@ export function SurplusHero({ summary }: SurplusHeroProps) {
   );
 }
 
-function formatMonthLabel(dateStr: string): string {
+function CustomTooltip(props: {
+  active?: boolean;
+  payload?: Array<{ value?: number; dataKey?: string | number }>;
+  label?: string;
+}) {
+  const { active, payload, label } = props;
+  if (!active || !payload || payload.length === 0) return null;
+
+  const actualValue =
+    typeof payload.find((entry) => entry.dataKey === "actualSurplus")?.value ===
+    "number"
+      ? (payload.find((entry) => entry.dataKey === "actualSurplus")?.value as number)
+      : 0;
+
+  const potentialValue =
+    typeof payload.find((entry) => entry.dataKey === "potentialSurplus")?.value ===
+    "number"
+      ? (payload.find((entry) => entry.dataKey === "potentialSurplus")?.value as number)
+      : 0;
+
+  const rows = [
+    { label: "Actual", value: actualValue, isPotential: false },
+    { label: "Potential", value: potentialValue, isPotential: true },
+  ];
+
+  return (
+    <div
+      style={{
+        fontSize: 12,
+        borderRadius: 8,
+        border: "1px solid rgba(0,0,0,0.08)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        backgroundColor: "#fff",
+        padding: "8px 12px",
+      }}
+    >
+      <p style={{ color: "rgb(104,102,100)", marginBottom: 4 }}>{label}</p>
+      {rows.map((row) => {
+        let color = "rgb(50,48,47)";
+        if (row.value < 0) {
+          color = "rgb(205,28,19)";
+        } else if (row.isPotential) {
+          color = "#0b8a3e";
+        }
+
+        const formatted =
+          row.value < 0
+            ? `-${formatCurrency(Math.abs(row.value))}`
+            : formatCurrency(row.value);
+
+        return (
+          <p key={row.label} style={{ color, fontWeight: 600 }}>
+            {row.label}: {formatted}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+export function formatMonthLabel(dateStr: string): string {
   const [year, month] = dateStr.split("-").map(Number);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
   const shortYear = String(year).slice(2);
   return `${months[month - 1]} '${shortYear}`;
 }

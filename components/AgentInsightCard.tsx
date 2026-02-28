@@ -23,7 +23,7 @@ export function AgentInsightCard({
         adjusting your habits
       </p>
 
-      <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
+      <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-hide">
         {topHabits.map((h) => (
           <span
             key={h.id}

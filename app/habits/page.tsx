@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile, HabitIntensity } from "@/lib/types";
@@ -29,6 +29,7 @@ export default function HabitsPage() {
 
   // Step navigation
   const [currentStep, setCurrentStep] = useState(0);
+  const directionRef = useRef<"forward" | "backward">("forward");
 
   // Step 0: Profile state
   const [name, setName] = useState(profile.name);
@@ -59,7 +60,6 @@ export default function HabitsPage() {
 
   function handleSelectHabit(id: string) {
     setSelectedHabitId(id);
-    // Pre-check all transactions for the newly selected habit (opt-out model)
     const habit = analysis.habitCandidates.find((h) => h.id === id);
     if (habit) {
       setConfirmedIds(new Set(habit.transactionIds));
@@ -67,12 +67,17 @@ export default function HabitsPage() {
   }
 
   function goNext() {
+    directionRef.current = "forward";
     setCurrentStep((s) => Math.min(s + 1, STEP_COUNT - 1));
   }
 
   function goBack() {
+    directionRef.current = "backward";
     setCurrentStep((s) => Math.max(s - 1, 0));
   }
+
+  const animClass =
+    directionRef.current === "forward" ? "step-forward" : "step-backward";
 
   return (
     <div className="min-h-screen bg-ws-off-white">
@@ -89,63 +94,65 @@ export default function HabitsPage() {
           ))}
         </div>
 
-        {currentStep === 0 && (
-          <ProfileStep
-            profile={profile}
-            name={name}
-            setName={setName}
-            age={age}
-            setAge={setAge}
-            location={location}
-            setLocation={setLocation}
-            riskTolerance={riskTolerance}
-            setRiskTolerance={setRiskTolerance}
-            investmentHorizon={investmentHorizon}
-            setInvestmentHorizon={setInvestmentHorizon}
-            grossIncome={grossIncome}
-            setGrossIncome={setGrossIncome}
-            onContinue={goNext}
-          />
-        )}
+        <div key={currentStep} className={animClass}>
+          {currentStep === 0 && (
+            <ProfileStep
+              profile={profile}
+              name={name}
+              setName={setName}
+              age={age}
+              setAge={setAge}
+              location={location}
+              setLocation={setLocation}
+              riskTolerance={riskTolerance}
+              setRiskTolerance={setRiskTolerance}
+              investmentHorizon={investmentHorizon}
+              setInvestmentHorizon={setInvestmentHorizon}
+              grossIncome={grossIncome}
+              setGrossIncome={setGrossIncome}
+              onContinue={goNext}
+            />
+          )}
 
-        {currentStep === 1 && (
-          <HabitSelectionStep
-            habits={analysis.habitCandidates}
-            selectedHabitId={selectedHabitId}
-            setSelectedHabitId={handleSelectHabit}
-            onBack={goBack}
-            onContinue={goNext}
-          />
-        )}
+          {currentStep === 1 && (
+            <HabitSelectionStep
+              habits={analysis.habitCandidates}
+              selectedHabitId={selectedHabitId}
+              setSelectedHabitId={handleSelectHabit}
+              onBack={goBack}
+              onContinue={goNext}
+            />
+          )}
 
-        {currentStep === 2 && selectedHabit && (
-          <TransactionReviewStep
-            habit={selectedHabit}
-            allTransactions={txns}
-            confirmedIds={confirmedIds}
-            setConfirmedIds={setConfirmedIds}
-            onBack={goBack}
-            onContinue={goNext}
-          />
-        )}
+          {currentStep === 2 && selectedHabit && (
+            <TransactionReviewStep
+              habit={selectedHabit}
+              allTransactions={txns}
+              confirmedIds={confirmedIds}
+              setConfirmedIds={setConfirmedIds}
+              onBack={goBack}
+              onContinue={goNext}
+            />
+          )}
 
-        {currentStep === 3 && selectedHabit && (
-          <GoalStep
-            habit={selectedHabit}
-            intensity={intensity}
-            setIntensity={setIntensity}
-            onBack={goBack}
-            onContinue={goNext}
-          />
-        )}
+          {currentStep === 3 && selectedHabit && (
+            <GoalStep
+              habit={selectedHabit}
+              intensity={intensity}
+              setIntensity={setIntensity}
+              onBack={goBack}
+              onContinue={goNext}
+            />
+          )}
 
-        {currentStep === 4 && selectedHabit && (
-          <SummaryStep
-            habit={selectedHabit}
-            intensity={intensity}
-            confirmedCount={confirmedIds.size}
-          />
-        )}
+          {currentStep === 4 && selectedHabit && (
+            <SummaryStep
+              habit={selectedHabit}
+              intensity={intensity}
+              confirmedCount={confirmedIds.size}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
