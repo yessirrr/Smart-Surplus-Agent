@@ -1,0 +1,747 @@
+{
+  "recurring_merchants": [
+    {
+      "merchant": "Toronto Property Mgmt",
+      "category": "rent",
+      "expected_amount": -1650.0,
+      "expected_day": 1,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Rogers",
+      "category": "phone",
+      "expected_amount": -65.0,
+      "expected_day": 18,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Bell",
+      "category": "internet",
+      "expected_amount": -74.99,
+      "expected_day": 22,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "GoodLife Fitness",
+      "category": "gym",
+      "expected_amount": -54.99,
+      "expected_day": 1,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Netflix",
+      "category": "subscriptions",
+      "expected_amount": -16.49,
+      "expected_day": 8,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Spotify",
+      "category": "subscriptions",
+      "expected_amount": -11.99,
+      "expected_day": 12,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Apple",
+      "category": "subscriptions",
+      "expected_amount": -3.99,
+      "expected_day": 5,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Presto",
+      "category": "transit",
+      "expected_amount": -156.0,
+      "expected_day": 1,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Sun Life",
+      "category": "insurance",
+      "expected_amount": -45.0,
+      "expected_day": 15,
+      "frequency": "monthly"
+    },
+    {
+      "merchant": "Shopify",
+      "category": "income",
+      "expected_amount": 2076.0,
+      "expected_day": "biweekly_friday",
+      "frequency": "biweekly"
+    }
+  ],
+  "habit_patterns": [
+    {
+      "pattern_name": "daily_coffee",
+      "category": "coffee",
+      "merchants": [
+        "Tim Hortons",
+        "Starbucks",
+        "Second Cup",
+        "Aroma Espresso Bar"
+      ],
+      "avg_monthly_frequency": 20.0,
+      "avg_monthly_cost": 111.5,
+      "detectable": true,
+      "recommendation": "Reduce coffee purchases by making coffee at home 3x/week. Potential monthly savings: ~$45-65."
+    },
+    {
+      "pattern_name": "food_delivery_habit",
+      "category": "food_delivery",
+      "merchants": [
+        "UberEats",
+        "DoorDash",
+        "SkipTheDishes"
+      ],
+      "avg_monthly_frequency": 12.0,
+      "avg_monthly_cost": 388.68,
+      "detectable": true,
+      "recommendation": "Replace 2 delivery orders per week with home cooking. Potential monthly savings: ~$140-200."
+    },
+    {
+      "pattern_name": "vaping_habit",
+      "category": "vaping",
+      "merchants": [
+        "180 Smoke",
+        "VapeKing",
+        "Smoke Outlet"
+      ],
+      "avg_monthly_frequency": 7.6,
+      "avg_monthly_cost": 196.26,
+      "detectable": true,
+      "recommendation": "Quit vaping entirely (aligns with stated goal). Potential monthly savings: ~$130-180."
+    },
+    {
+      "pattern_name": "social_drinking",
+      "category": "alcohol",
+      "merchants": [
+        "LCBO",
+        "Beer Store",
+        "Bar Hop",
+        "The Pint",
+        "Bandit Brewery"
+      ],
+      "avg_monthly_frequency": 5.8,
+      "avg_monthly_cost": 187.4,
+      "detectable": true,
+      "recommendation": "Reduce bar visits to 2x/month, buy at LCBO instead. Potential monthly savings: ~$80-120."
+    },
+    {
+      "pattern_name": "impulse_online_shopping",
+      "category": "impulse_shopping",
+      "merchants": [
+        "Amazon",
+        "Best Buy",
+        "Winners",
+        "Uniqlo"
+      ],
+      "avg_monthly_frequency": 4.0,
+      "avg_monthly_cost": 213.71,
+      "detectable": true,
+      "recommendation": "Implement a 48-hour rule before any online purchase. Potential monthly savings: ~$50-100."
+    }
+  ],
+  "income_streams": [
+    {
+      "source": "Shopify",
+      "type": "employment",
+      "frequency": "biweekly",
+      "expected_amount": 2076.0
+    }
+  ],
+  "monthly_summary": {
+    "2024-01": {
+      "income": 4152.0,
+      "spending": 3979.71,
+      "surplus": 172.29,
+      "transaction_count": 82,
+      "category_breakdown": {
+        "alcohol": 278.21,
+        "coffee": 101.62,
+        "dining_out": 181.27,
+        "food_delivery": 406.55,
+        "groceries": 508.08,
+        "gym": 54.99,
+        "impulse_shopping": 158.69,
+        "insurance": 45.0,
+        "internet": 77.76,
+        "phone": 62.25,
+        "rent": 1650.0,
+        "rideshare": 75.97,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 190.85
+      }
+    },
+    "2024-02": {
+      "income": 4292.41,
+      "spending": 3664.26,
+      "surplus": 628.15,
+      "transaction_count": 74,
+      "category_breakdown": {
+        "alcohol": 104.57,
+        "coffee": 88.98,
+        "dining_out": 213.85,
+        "food_delivery": 213.75,
+        "groceries": 458.18,
+        "gym": 54.99,
+        "impulse_shopping": 247.16,
+        "insurance": 45.0,
+        "internet": 75.98,
+        "pharmacy": 13.76,
+        "phone": 65.52,
+        "rent": 1650.0,
+        "rideshare": 85.8,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 158.25
+      }
+    },
+    "2024-03": {
+      "income": 6312.9,
+      "spending": 4482.76,
+      "surplus": 1830.14,
+      "transaction_count": 90,
+      "category_breakdown": {
+        "alcohol": 227.81,
+        "coffee": 121.38,
+        "dining_out": 183.78,
+        "electronics": 285.0,
+        "food_delivery": 411.68,
+        "groceries": 675.15,
+        "gym": 54.99,
+        "impulse_shopping": 238.31,
+        "insurance": 45.0,
+        "internet": 71.9,
+        "phone": 61.37,
+        "rent": 1650.0,
+        "rideshare": 96.48,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 171.44
+      }
+    },
+    "2024-04": {
+      "income": 4152.0,
+      "spending": 4012.95,
+      "surplus": 139.05,
+      "transaction_count": 82,
+      "category_breakdown": {
+        "alcohol": 252.68,
+        "coffee": 96.46,
+        "dining_out": 145.05,
+        "food_delivery": 341.15,
+        "groceries": 545.83,
+        "gym": 54.99,
+        "health": 88.54,
+        "impulse_shopping": 143.86,
+        "insurance": 45.0,
+        "internet": 77.21,
+        "phone": 59.97,
+        "rent": 1650.0,
+        "rideshare": 112.49,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 211.25
+      }
+    },
+    "2024-05": {
+      "income": 4152.0,
+      "spending": 3788.1,
+      "surplus": 363.9,
+      "transaction_count": 80,
+      "category_breakdown": {
+        "alcohol": 93.3,
+        "coffee": 110.37,
+        "dining_out": 214.98,
+        "food_delivery": 361.59,
+        "groceries": 472.16,
+        "gym": 54.99,
+        "impulse_shopping": 169.51,
+        "insurance": 45.0,
+        "internet": 77.72,
+        "personal_care": 45.6,
+        "pharmacy": 24.47,
+        "phone": 64.2,
+        "rent": 1650.0,
+        "rideshare": 55.43,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 160.31
+      }
+    },
+    "2024-06": {
+      "income": 4312.19,
+      "spending": 4318.77,
+      "surplus": -6.58,
+      "transaction_count": 90,
+      "category_breakdown": {
+        "alcohol": 107.16,
+        "coffee": 117.67,
+        "dining_out": 208.54,
+        "fitness": 149.99,
+        "food_delivery": 555.21,
+        "groceries": 570.73,
+        "gym": 54.99,
+        "impulse_shopping": 187.79,
+        "insurance": 45.0,
+        "internet": 73.44,
+        "personal_care": 35.78,
+        "phone": 66.03,
+        "rent": 1650.0,
+        "rideshare": 102.47,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 205.5
+      }
+    },
+    "2024-07": {
+      "income": 4152.0,
+      "spending": 4306.83,
+      "surplus": -154.83,
+      "transaction_count": 92,
+      "category_breakdown": {
+        "alcohol": 220.27,
+        "coffee": 140.13,
+        "dining_out": 199.69,
+        "food_delivery": 414.17,
+        "groceries": 674.19,
+        "gym": 54.99,
+        "impulse_shopping": 200.84,
+        "insurance": 45.0,
+        "internet": 76.2,
+        "personal_care": 42.72,
+        "pharmacy": 17.8,
+        "phone": 67.76,
+        "rent": 1650.0,
+        "rideshare": 85.49,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 229.11
+      }
+    },
+    "2024-08": {
+      "income": 6308.17,
+      "spending": 4091.73,
+      "surplus": 2216.44,
+      "transaction_count": 101,
+      "category_breakdown": {
+        "alcohol": 174.92,
+        "coffee": 144.5,
+        "dining_out": 312.66,
+        "food_delivery": 463.85,
+        "groceries": 465.69,
+        "gym": 54.99,
+        "impulse_shopping": 127.84,
+        "insurance": 45.0,
+        "internet": 73.09,
+        "phone": 62.15,
+        "rent": 1650.0,
+        "rideshare": 85.67,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 242.9
+      }
+    },
+    "2024-09": {
+      "income": 4152.0,
+      "spending": 4278.77,
+      "surplus": -126.77,
+      "transaction_count": 81,
+      "category_breakdown": {
+        "alcohol": 203.39,
+        "coffee": 100.73,
+        "dining_out": 215.22,
+        "food_delivery": 292.2,
+        "groceries": 613.4,
+        "gym": 54.99,
+        "impulse_shopping": 178.38,
+        "insurance": 45.0,
+        "internet": 72.69,
+        "phone": 66.02,
+        "rent": 1650.0,
+        "rideshare": 83.36,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "travel": 320.0,
+        "vaping": 194.92
+      }
+    },
+    "2024-10": {
+      "income": 4152.0,
+      "spending": 4166.73,
+      "surplus": -14.73,
+      "transaction_count": 84,
+      "category_breakdown": {
+        "alcohol": 182.29,
+        "coffee": 99.25,
+        "dining_out": 220.69,
+        "food_delivery": 322.16,
+        "groceries": 485.94,
+        "gym": 54.99,
+        "health": 123.45,
+        "home": 89.99,
+        "impulse_shopping": 232.27,
+        "insurance": 45.0,
+        "internet": 77.93,
+        "personal_care": 46.07,
+        "pharmacy": 32.04,
+        "phone": 60.72,
+        "rent": 1650.0,
+        "rideshare": 122.14,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 133.33
+      }
+    },
+    "2024-11": {
+      "income": 4310.68,
+      "spending": 4898.59,
+      "surplus": -587.91,
+      "transaction_count": 93,
+      "category_breakdown": {
+        "alcohol": 202.63,
+        "coffee": 106.95,
+        "dining_out": 216.95,
+        "electronics": 344.73,
+        "food_delivery": 439.96,
+        "groceries": 609.71,
+        "gym": 54.99,
+        "health": 165.25,
+        "impulse_shopping": 381.06,
+        "insurance": 45.0,
+        "internet": 71.71,
+        "phone": 60.75,
+        "rent": 1650.0,
+        "rideshare": 86.91,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 273.52
+      }
+    },
+    "2024-12": {
+      "income": 4152.0,
+      "spending": 4807.68,
+      "surplus": -655.68,
+      "transaction_count": 103,
+      "category_breakdown": {
+        "alcohol": 204.69,
+        "coffee": 136.21,
+        "dining_out": 172.59,
+        "food_delivery": 586.6,
+        "gifts": 335.8,
+        "groceries": 605.14,
+        "gym": 54.99,
+        "impulse_shopping": 334.37,
+        "insurance": 45.0,
+        "internet": 76.59,
+        "personal_care": 36.18,
+        "pharmacy": 26.02,
+        "phone": 64.94,
+        "rent": 1650.0,
+        "rideshare": 82.27,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 207.82
+      }
+    },
+    "2025-01": {
+      "income": 6228.0,
+      "spending": 4063.45,
+      "surplus": 2164.55,
+      "transaction_count": 82,
+      "category_breakdown": {
+        "alcohol": 167.01,
+        "coffee": 102.33,
+        "dining_out": 130.58,
+        "food_delivery": 322.14,
+        "groceries": 735.23,
+        "gym": 54.99,
+        "impulse_shopping": 191.06,
+        "insurance": 45.0,
+        "internet": 74.96,
+        "pharmacy": 17.0,
+        "phone": 59.39,
+        "rent": 1650.0,
+        "rideshare": 139.19,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 186.1
+      }
+    },
+    "2025-02": {
+      "income": 4285.32,
+      "spending": 4193.3,
+      "surplus": 92.02,
+      "transaction_count": 82,
+      "category_breakdown": {
+        "alcohol": 181.17,
+        "coffee": 81.26,
+        "dining_out": 190.09,
+        "food_delivery": 333.92,
+        "groceries": 634.78,
+        "gym": 54.99,
+        "health": 141.6,
+        "impulse_shopping": 169.32,
+        "insurance": 45.0,
+        "internet": 77.12,
+        "personal_care": 35.23,
+        "pharmacy": 36.71,
+        "phone": 67.17,
+        "rent": 1650.0,
+        "rideshare": 121.23,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 185.24
+      }
+    },
+    "2025-03": {
+      "income": 4152.0,
+      "spending": 4076.74,
+      "surplus": 75.26,
+      "transaction_count": 92,
+      "category_breakdown": {
+        "alcohol": 225.5,
+        "coffee": 138.31,
+        "dining_out": 238.11,
+        "food_delivery": 435.82,
+        "groceries": 525.57,
+        "gym": 54.99,
+        "impulse_shopping": 159.64,
+        "insurance": 45.0,
+        "internet": 72.56,
+        "pharmacy": 7.65,
+        "phone": 60.37,
+        "rent": 1650.0,
+        "rideshare": 134.19,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 140.56
+      }
+    },
+    "2025-04": {
+      "income": 4221.67,
+      "spending": 3990.52,
+      "surplus": 231.15,
+      "transaction_count": 79,
+      "category_breakdown": {
+        "alcohol": 167.35,
+        "coffee": 92.16,
+        "dining_out": 197.43,
+        "electronics": 199.99,
+        "food_delivery": 322.87,
+        "groceries": 456.82,
+        "gym": 54.99,
+        "impulse_shopping": 188.5,
+        "insurance": 45.0,
+        "internet": 71.42,
+        "personal_care": 38.1,
+        "phone": 60.74,
+        "rent": 1650.0,
+        "rideshare": 42.49,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 214.19
+      }
+    },
+    "2025-05": {
+      "income": 4152.0,
+      "spending": 4028.41,
+      "surplus": 123.59,
+      "transaction_count": 84,
+      "category_breakdown": {
+        "alcohol": 176.71,
+        "coffee": 101.45,
+        "dining_out": 136.01,
+        "food_delivery": 379.53,
+        "groceries": 662.85,
+        "gym": 54.99,
+        "impulse_shopping": 264.08,
+        "insurance": 45.0,
+        "internet": 69.23,
+        "phone": 63.17,
+        "rent": 1650.0,
+        "rideshare": 114.21,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 122.71
+      }
+    },
+    "2025-06": {
+      "income": 4152.0,
+      "spending": 4209.81,
+      "surplus": -57.81,
+      "transaction_count": 86,
+      "category_breakdown": {
+        "alcohol": 176.96,
+        "coffee": 111.82,
+        "dining_out": 226.96,
+        "food_delivery": 433.37,
+        "groceries": 759.67,
+        "gym": 54.99,
+        "impulse_shopping": 138.17,
+        "insurance": 45.0,
+        "internet": 73.02,
+        "pharmacy": 7.35,
+        "phone": 64.59,
+        "rent": 1650.0,
+        "rideshare": 83.36,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 196.08
+      }
+    },
+    "2025-07": {
+      "income": 4152.0,
+      "spending": 4374.84,
+      "surplus": -222.84,
+      "transaction_count": 92,
+      "category_breakdown": {
+        "alcohol": 164.01,
+        "coffee": 117.19,
+        "dining_out": 173.25,
+        "food_delivery": 437.78,
+        "groceries": 482.04,
+        "gym": 54.99,
+        "health": 135.0,
+        "impulse_shopping": 337.0,
+        "insurance": 45.0,
+        "internet": 72.42,
+        "pharmacy": 11.45,
+        "phone": 60.54,
+        "rent": 1650.0,
+        "rideshare": 11.43,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "travel": 175.0,
+        "vaping": 259.27
+      }
+    },
+    "2025-08": {
+      "income": 6228.0,
+      "spending": 4407.07,
+      "surplus": 1820.93,
+      "transaction_count": 88,
+      "category_breakdown": {
+        "alcohol": 267.75,
+        "coffee": 114.19,
+        "dining_out": 220.97,
+        "food_delivery": 347.44,
+        "groceries": 578.91,
+        "gym": 54.99,
+        "impulse_shopping": 208.05,
+        "insurance": 45.0,
+        "internet": 72.79,
+        "personal_care": 42.79,
+        "pharmacy": 24.27,
+        "phone": 60.24,
+        "rent": 1650.0,
+        "rideshare": 59.86,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "travel": 250.0,
+        "vaping": 221.35
+      }
+    },
+    "2025-09": {
+      "income": 4152.0,
+      "spending": 4350.7,
+      "surplus": -198.7,
+      "transaction_count": 87,
+      "category_breakdown": {
+        "alcohol": 187.08,
+        "coffee": 100.69,
+        "dining_out": 256.82,
+        "food_delivery": 343.72,
+        "groceries": 801.74,
+        "gym": 54.99,
+        "impulse_shopping": 241.65,
+        "insurance": 45.0,
+        "internet": 77.58,
+        "personal_care": 34.2,
+        "phone": 61.66,
+        "rent": 1650.0,
+        "rideshare": 109.79,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 197.31
+      }
+    },
+    "2025-10": {
+      "income": 4215.09,
+      "spending": 3885.55,
+      "surplus": 329.54,
+      "transaction_count": 87,
+      "category_breakdown": {
+        "alcohol": 174.5,
+        "coffee": 116.47,
+        "dining_out": 156.8,
+        "food_delivery": 345.4,
+        "groceries": 552.1,
+        "gym": 54.99,
+        "impulse_shopping": 161.64,
+        "insurance": 45.0,
+        "internet": 75.39,
+        "pharmacy": 29.41,
+        "phone": 65.95,
+        "rent": 1650.0,
+        "rideshare": 89.36,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 180.07
+      }
+    },
+    "2025-11": {
+      "income": 4206.28,
+      "spending": 4358.63,
+      "surplus": -152.35,
+      "transaction_count": 82,
+      "category_breakdown": {
+        "alcohol": 129.92,
+        "coffee": 122.24,
+        "dining_out": 172.18,
+        "electronics": 225.9,
+        "fitness": 129.99,
+        "food_delivery": 383.04,
+        "groceries": 621.22,
+        "gym": 54.99,
+        "impulse_shopping": 233.86,
+        "insurance": 45.0,
+        "internet": 75.89,
+        "phone": 67.28,
+        "rent": 1650.0,
+        "rideshare": 101.31,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 157.34
+      }
+    },
+    "2025-12": {
+      "income": 4152.0,
+      "spending": 4502.19,
+      "surplus": -350.19,
+      "transaction_count": 99,
+      "category_breakdown": {
+        "alcohol": 227.68,
+        "coffee": 113.58,
+        "dining_out": 180.7,
+        "food_delivery": 434.42,
+        "gifts": 143.1,
+        "groceries": 597.46,
+        "gym": 54.99,
+        "impulse_shopping": 236.0,
+        "insurance": 45.0,
+        "internet": 75.49,
+        "personal_care": 43.07,
+        "pharmacy": 24.36,
+        "phone": 67.09,
+        "rent": 1650.0,
+        "rideshare": 149.95,
+        "subscriptions": 32.47,
+        "transit": 156.0,
+        "vaping": 270.83
+      }
+    }
+  }
+}

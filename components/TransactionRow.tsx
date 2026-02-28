@@ -7,7 +7,7 @@ interface TransactionRowProps {
 }
 
 export function TransactionRow({ transaction }: TransactionRowProps) {
-  const isIncome = transaction.type === "income";
+  const isIncome = transaction.type === "credit";
 
   return (
     <div className="flex items-center gap-3 py-3">

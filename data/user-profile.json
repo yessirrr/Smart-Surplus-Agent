@@ -1,13 +1,28 @@
 {
-  "name": "Fitsum Abraha",
-  "firstName": "Fitsum",
-  "age": 22,
-  "monthlyIncome": 2800,
-  "riskTolerance": "medium",
-  "investmentGoal": "Build long-term wealth through consistent TFSA contributions",
-  "currentHoldings": {
-    "tfsa": 1240.50,
-    "crypto": 310.00,
-    "cashBalance": 487.32
-  }
+  "id": "user_001",
+  "name": "Marcus Chen",
+  "age": 27,
+  "province": "Ontario",
+  "city": "Toronto",
+  "income": {
+    "gross_annual": 72000,
+    "net_biweekly": 2076,
+    "pay_schedule": "biweekly",
+    "pay_day": "friday",
+    "employer": "Shopify"
+  },
+  "accounts": {
+    "chequing_balance": 3200,
+    "savings_balance": 8500,
+    "tfsa_balance": 4200,
+    "rrsp_balance": 0
+  },
+  "risk_tolerance": "medium",
+  "investment_horizon": "long",
+  "goals": [
+    "build emergency fund to 15k",
+    "start investing consistently",
+    "quit vaping"
+  ],
+  "created_at": "2024-01-01"
 }

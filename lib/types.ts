@@ -1,10 +1,11 @@
 export interface Transaction {
   id: string;
   date: string;
-  description: string;
   amount: number;
+  merchant: string;
   category: TransactionCategory;
-  type: "expense" | "income";
+  type: "debit" | "credit";
+  description: string;
 }
 
 export type TransactionCategory =
@@ -12,23 +13,50 @@ export type TransactionCategory =
   | "groceries"
   | "transit"
   | "subscriptions"
-  | "dining"
-  | "rideshare"
-  | "shopping"
   | "income"
   | "transfer"
+  | "coffee"
+  | "food_delivery"
+  | "vaping"
+  | "alcohol"
+  | "impulse_shopping"
+  | "dining_out"
+  | "rideshare"
+  | "phone"
+  | "internet"
+  | "gym"
+  | "insurance"
+  | "health"
+  | "personal_care"
+  | "pharmacy"
+  | "electronics"
+  | "travel"
+  | "fitness"
+  | "home"
+  | "gifts"
   | "other";
 
 export interface UserProfile {
+  id: string;
   name: string;
-  firstName: string;
   age: number;
-  monthlyIncome: number;
-  riskTolerance: "low" | "medium" | "high";
-  investmentGoal: string;
-  currentHoldings: {
-    tfsa: number;
-    crypto: number;
-    cashBalance: number;
+  province: string;
+  city: string;
+  income: {
+    gross_annual: number;
+    net_biweekly: number;
+    pay_schedule: string;
+    pay_day: string;
+    employer: string;
   };
+  accounts: {
+    chequing_balance: number;
+    savings_balance: number;
+    tfsa_balance: number;
+    rrsp_balance: number;
+  };
+  risk_tolerance: "low" | "medium" | "high";
+  investment_horizon: string;
+  goals: string[];
+  created_at: string;
 }

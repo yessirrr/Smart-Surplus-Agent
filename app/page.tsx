@@ -12,27 +12,36 @@ export default function DashboardPage() {
   const profile = userProfile as UserProfile;
   const txns = transactions as Transaction[];
 
+  // Total balance across all accounts
   const totalBalance =
-    profile.currentHoldings.tfsa +
-    profile.currentHoldings.crypto +
-    profile.currentHoldings.cashBalance;
+    profile.accounts.chequing_balance +
+    profile.accounts.savings_balance +
+    profile.accounts.tfsa_balance +
+    profile.accounts.rrsp_balance;
 
-  // Current month spending (February 2026)
-  const currentMonth = txns.filter((t) => t.date.startsWith("2026-02"));
+  // Latest month in the dataset for spending calculation
+  const latestDate = txns[txns.length - 1]?.date ?? "";
+  const latestMonth = latestDate.slice(0, 7); // "2025-12"
+
+  const currentMonth = txns.filter((t) => t.date.startsWith(latestMonth));
   const monthlySpending = currentMonth
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "debit")
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  const monthlyInvesting = profile.currentHoldings.tfsa;
+  // Investing = TFSA + RRSP balances as a proxy
+  const monthlyInvesting = profile.accounts.tfsa_balance;
 
-  // Recent transactions: last 15, sorted newest first
+  // Extract first name from full name
+  const firstName = profile.name.split(" ")[0];
+
+  // Recent transactions: last 20, sorted newest first
   const recentTransactions = [...txns]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 15);
+    .slice(0, 20);
 
   return (
     <div className="pb-12">
-      <Header userName={profile.firstName} />
+      <Header userName={firstName} />
       <BalanceCard balance={totalBalance} />
       <div className="flex flex-col gap-4">
         <SpendInvestBreakdown
