@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import type { HabitCandidate } from "@/lib/types";
+import { useAgent, type HabitInsightResult } from "@/lib/agent";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 
@@ -19,6 +21,19 @@ export function HabitSelectionStep({
   onBack,
   onContinue,
 }: HabitSelectionStepProps) {
+  const {
+    data: insight,
+    loading: insightLoading,
+    error: insightError,
+    generate: fetchInsight,
+  } = useAgent<HabitInsightResult>("/api/agent/habit-insight");
+
+  useEffect(() => {
+    if (selectedHabitId) {
+      fetchInsight({ habitId: selectedHabitId });
+    }
+  }, [selectedHabitId, fetchInsight]);
+
   return (
     <div>
       <h1 className="text-xl font-bold text-ws-charcoal">
@@ -77,6 +92,40 @@ export function HabitSelectionStep({
         })}
       </div>
 
+      {/* Odysseus Insight */}
+      {selectedHabitId && (
+        <div className="mt-4">
+          {insightLoading && <InsightSkeleton />}
+          {!insightLoading && insight && !insightError && (
+            <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm">&#10024;</span>
+                <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
+                  Odysseus Insight
+                </p>
+              </div>
+              <p className="text-sm font-bold text-ws-charcoal">
+                {insight.headline}
+              </p>
+              <p className="text-xs text-ws-grey mt-2 leading-relaxed">
+                {insight.explanation}
+              </p>
+              <p className="text-xs text-ws-green mt-2 italic leading-relaxed">
+                {insight.motivationalHook}
+              </p>
+              <div className="mt-3 bg-ws-off-white rounded-[6px] px-3 py-2">
+                <p className="text-xs text-ws-charcoal">
+                  {insight.actionSuggestion}
+                </p>
+              </div>
+            </div>
+          )}
+          {!insightLoading && insightError && (
+            <p className="text-xs text-ws-grey mt-2">Insight unavailable</p>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-3 mt-6">
         <button
           onClick={onBack}
@@ -92,6 +141,21 @@ export function HabitSelectionStep({
           Continue
         </button>
       </div>
+    </div>
+  );
+}
+
+function InsightSkeleton() {
+  return (
+    <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5 animate-pulse">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-4 h-4 bg-ws-light-grey rounded" />
+        <div className="w-24 h-3 bg-ws-light-grey rounded" />
+      </div>
+      <div className="w-3/4 h-4 bg-ws-light-grey rounded" />
+      <div className="w-full h-3 bg-ws-light-grey rounded mt-3" />
+      <div className="w-5/6 h-3 bg-ws-light-grey rounded mt-1.5" />
+      <div className="w-2/3 h-3 bg-ws-light-grey rounded mt-3" />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   AreaChart,
   Area,
@@ -10,6 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
+import { useAgent, type SurplusNarrativeResult } from "@/lib/agent";
 
 export interface ChartDataPoint {
   month: string;
@@ -38,6 +40,17 @@ export function SurplusHero({
     delta > 0
       ? delta * ((Math.pow(1 + r / 12, n * 12) - 1) / (r / 12))
       : 0;
+
+  const {
+    data: narrative,
+    loading: narrativeLoading,
+    generate: fetchNarrative,
+  } = useAgent<SurplusNarrativeResult>("/api/agent/surplus-narrative");
+
+  useEffect(() => {
+    fetchNarrative();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div>
@@ -75,6 +88,31 @@ export function SurplusHero({
             ~{formatCurrency(fv)}
           </span>
         </p>
+      </div>
+
+      {/* Odysseus Analysis */}
+      <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5 mt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm">&#10024;</span>
+          <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
+            Odysseus Analysis
+          </p>
+        </div>
+        {narrativeLoading && <NarrativeSkeleton />}
+        {!narrativeLoading && narrative && (
+          <>
+            <p className="text-sm text-ws-charcoal leading-relaxed">
+              {narrative.situationSummary} {narrative.trendAnalysis}{" "}
+              {narrative.opportunityStatement}
+            </p>
+            <p className="text-xs text-ws-grey mt-2 leading-relaxed">
+              {narrative.projectionNote}
+            </p>
+          </>
+        )}
+        {!narrativeLoading && !narrative && (
+          <p className="text-xs text-ws-grey">Analysis unavailable</p>
+        )}
       </div>
 
       {/* Trend chart */}
@@ -218,6 +256,16 @@ function CustomTooltip(props: {
           </p>
         );
       })}
+    </div>
+  );
+}
+
+function NarrativeSkeleton() {
+  return (
+    <div className="animate-pulse">
+      <div className="w-full h-3 bg-ws-light-grey rounded" />
+      <div className="w-5/6 h-3 bg-ws-light-grey rounded mt-2" />
+      <div className="w-4/6 h-3 bg-ws-light-grey rounded mt-2" />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { useAgent, type AllocationReasoningResult } from "@/lib/agent";
 
 type PlanId = "conservative" | "balanced" | "growth";
 
@@ -18,6 +19,8 @@ interface Plan {
   id: PlanId;
   name: string;
   allocation: string;
+  bondsPct: number;
+  equityPct: number;
   rate: number;
   riskLevel: number;
   description: string;
@@ -29,6 +32,8 @@ const PLANS: Plan[] = [
     id: "conservative",
     name: "Conservative",
     allocation: "80% Bonds ETF / 20% Equity ETF",
+    bondsPct: 80,
+    equityPct: 20,
     rate: 0.04,
     riskLevel: 1,
     description: "Steady and predictable. Prioritizes capital preservation.",
@@ -37,6 +42,8 @@ const PLANS: Plan[] = [
     id: "balanced",
     name: "Balanced",
     allocation: "40% Bonds ETF / 60% Equity ETF",
+    bondsPct: 40,
+    equityPct: 60,
     rate: 0.07,
     riskLevel: 2,
     description: "Growth with guardrails. A classic long-term approach.",
@@ -46,6 +53,8 @@ const PLANS: Plan[] = [
     id: "growth",
     name: "Growth",
     allocation: "10% Bonds ETF / 90% Equity ETF",
+    bondsPct: 10,
+    equityPct: 90,
     rate: 0.1,
     riskLevel: 3,
     description: "Maximum growth potential. Comfortable with volatility.",
@@ -70,7 +79,26 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
   const [check2, setCheck2] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
+  const {
+    data: reasoning,
+    loading: reasoningLoading,
+    generate: fetchReasoning,
+  } = useAgent<AllocationReasoningResult>("/api/agent/allocation-reasoning");
+
   const plan = PLANS.find((p) => p.id === selectedPlan)!;
+
+  useEffect(() => {
+    fetchReasoning({
+      riskTolerance: "medium",
+      horizon: "long",
+      planName: plan.name,
+      bondsPct: plan.bondsPct,
+      equityPct: plan.equityPct,
+      expectedReturn: plan.rate,
+      monthlySavings,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlan]);
 
   const fv1 = futureValue(monthlySavings, plan.rate, 1);
   const fv5 = futureValue(monthlySavings, plan.rate, 5);
@@ -252,6 +280,36 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
         </div>
       </div>
 
+      {/* Why this plan? */}
+      <div className="mt-4 bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm">&#10024;</span>
+          <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
+            Why this plan?
+          </p>
+        </div>
+        {reasoningLoading && <ReasoningSkeleton />}
+        {!reasoningLoading && reasoning && (
+          <>
+            <p className="text-sm text-ws-charcoal leading-relaxed">
+              {reasoning.reasoning}
+            </p>
+            <p className="text-xs text-ws-charcoal mt-2 leading-relaxed">
+              {reasoning.riskExplanation}
+            </p>
+            <p className="text-xs text-ws-charcoal mt-2 leading-relaxed">
+              {reasoning.historicalContext}
+            </p>
+            <p className="text-[10px] text-ws-grey mt-3 italic leading-relaxed">
+              {reasoning.caveat}
+            </p>
+          </>
+        )}
+        {!reasoningLoading && !reasoning && (
+          <p className="text-xs text-ws-grey">Reasoning unavailable</p>
+        )}
+      </div>
+
       {/* CTA / Confirmation */}
       {!showConfirm ? (
         <button
@@ -319,6 +377,17 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ReasoningSkeleton() {
+  return (
+    <div className="animate-pulse">
+      <div className="w-full h-3 bg-ws-light-grey rounded" />
+      <div className="w-5/6 h-3 bg-ws-light-grey rounded mt-2" />
+      <div className="w-full h-3 bg-ws-light-grey rounded mt-2" />
+      <div className="w-3/4 h-3 bg-ws-light-grey rounded mt-2" />
     </div>
   );
 }
