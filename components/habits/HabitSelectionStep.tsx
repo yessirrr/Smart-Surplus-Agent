@@ -1,10 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
 import type { HabitCandidate } from "@/lib/types";
-import { useAgent } from "@/lib/agent/use-agent";
-import type { HabitInsightResult } from "@/lib/agent/skills/habit-insight";
-import { CATEGORY_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 
 interface HabitSelectionStepProps {
@@ -22,19 +18,6 @@ export function HabitSelectionStep({
   onBack,
   onContinue,
 }: HabitSelectionStepProps) {
-  const {
-    data: insight,
-    loading: insightLoading,
-    error: insightError,
-    generate: fetchInsight,
-  } = useAgent<HabitInsightResult>("/api/agent/habit-insight");
-
-  useEffect(() => {
-    if (selectedHabitId) {
-      fetchInsight({ habitId: selectedHabitId });
-    }
-  }, [selectedHabitId, fetchInsight]);
-
   return (
     <div>
       <h1 className="text-xl font-bold text-ws-charcoal">
@@ -54,17 +37,12 @@ export function HabitSelectionStep({
               className={`text-left bg-ws-white rounded-[8px] p-4 transition-all ${
                 selected
                   ? "border-2 border-ws-charcoal shadow-[0_2px_8px_rgba(0,0,0,0.1)]"
-                  : "border border-ws-border shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                  : "border border-ws-border shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:border-ws-charcoal/30"
               }`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-bold text-ws-charcoal">
-                  {habit.name}
-                </p>
-                <span className="shrink-0 text-[10px] font-medium text-ws-grey bg-ws-light-grey rounded-[72px] px-2 py-0.5">
-                  {CATEGORY_LABELS[habit.category] ?? habit.category}
-                </span>
-              </div>
+              <p className="text-sm font-bold text-ws-charcoal">
+                {habit.name}
+              </p>
 
               <p className="text-lg font-bold text-ws-red mt-2">
                 {formatCurrency(habit.metrics.monthlySpend)}
@@ -80,52 +58,10 @@ export function HabitSelectionStep({
                   {(habit.confidence * 100).toFixed(0)}% confidence
                 </span>
               </div>
-
-              <p className="text-xs text-ws-grey mt-2 truncate">
-                {habit.merchants.join(", ")}
-              </p>
-              <p className="text-[10px] text-ws-grey mt-1">
-                {habit.transactionIds.length} transactions &middot;{" "}
-                {habit.metrics.monthsActive} months
-              </p>
             </button>
           );
         })}
       </div>
-
-      {/* Odysseus Insight */}
-      {selectedHabitId && (
-        <div className="mt-4">
-          {insightLoading && <InsightSkeleton />}
-          {!insightLoading && insight && !insightError && (
-            <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm">&#10024;</span>
-                <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
-                  Odysseus Insight
-                </p>
-              </div>
-              <p className="text-sm font-bold text-ws-charcoal">
-                {insight.headline}
-              </p>
-              <p className="text-xs text-ws-grey mt-2 leading-relaxed">
-                {insight.explanation}
-              </p>
-              <p className="text-xs text-ws-green mt-2 italic leading-relaxed">
-                {insight.motivationalHook}
-              </p>
-              <div className="mt-3 bg-ws-off-white rounded-[6px] px-3 py-2">
-                <p className="text-xs text-ws-charcoal">
-                  {insight.actionSuggestion}
-                </p>
-              </div>
-            </div>
-          )}
-          {!insightLoading && insightError && (
-            <p className="text-xs text-ws-grey mt-2">Insight unavailable</p>
-          )}
-        </div>
-      )}
 
       <div className="flex gap-3 mt-6">
         <button
@@ -142,21 +78,6 @@ export function HabitSelectionStep({
           Continue
         </button>
       </div>
-    </div>
-  );
-}
-
-function InsightSkeleton() {
-  return (
-    <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5 animate-pulse">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-4 h-4 bg-ws-light-grey rounded" />
-        <div className="w-24 h-3 bg-ws-light-grey rounded" />
-      </div>
-      <div className="w-3/4 h-4 bg-ws-light-grey rounded" />
-      <div className="w-full h-3 bg-ws-light-grey rounded mt-3" />
-      <div className="w-5/6 h-3 bg-ws-light-grey rounded mt-1.5" />
-      <div className="w-2/3 h-3 bg-ws-light-grey rounded mt-3" />
     </div>
   );
 }

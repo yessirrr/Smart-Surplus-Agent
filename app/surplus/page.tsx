@@ -5,6 +5,7 @@ import Link from "next/link";
 import transactions from "@/data/transactions.json";
 import type { Transaction } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
+import { buildRecurringHabit } from "@/lib/utils/build-recurring-habit";
 import { SurplusHero, formatMonthLabel } from "@/components/surplus/SurplusHero";
 import { HabitToggleBar } from "@/components/surplus/HabitToggleBar";
 import { SpendingBreakdown } from "@/components/surplus/SpendingBreakdown";
@@ -23,7 +24,15 @@ export default function SurplusPage() {
     [txns]
   );
 
-  const { surplusSummary, habitCandidates } = analysis;
+  const { surplusSummary } = analysis;
+
+  // Include synthetic recurring habit in candidates
+  const habitCandidates = useMemo(() => {
+    const recurring = buildRecurringHabit(analysis.recurringPatterns, txns);
+    return recurring
+      ? [...analysis.habitCandidates, recurring]
+      : analysis.habitCandidates;
+  }, [analysis, txns]);
 
   // Habit toggle state - all selected by default
   const [selectedHabitIds, setSelectedHabitIds] = useState<Set<string>>(

@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import Link from "next/link";
 import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile, HabitIntensity } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
+import { useAgent } from "@/lib/agent/use-agent";
+import type { HabitInsightResult } from "@/lib/agent/skills/habit-insight";
+import { buildRecurringHabit } from "@/lib/utils/build-recurring-habit";
 import { ProfileStep } from "@/components/habits/ProfileStep";
 import { HabitSelectionStep } from "@/components/habits/HabitSelectionStep";
 import { TransactionReviewStep } from "@/components/habits/TransactionReviewStep";
@@ -26,6 +30,14 @@ export default function HabitsPage() {
       }),
     [txns]
   );
+
+  // Build synthetic recurring habit and append to candidates
+  const allHabitCandidates = useMemo(() => {
+    const recurring = buildRecurringHabit(analysis.recurringPatterns, txns);
+    return recurring
+      ? [...analysis.habitCandidates, recurring]
+      : analysis.habitCandidates;
+  }, [analysis, txns]);
 
   // Step navigation
   const [currentStep, setCurrentStep] = useState(0);
@@ -54,13 +66,27 @@ export default function HabitsPage() {
   // Step 3: Goal intensity
   const [intensity, setIntensity] = useState<HabitIntensity>("standard");
 
-  const selectedHabit = analysis.habitCandidates.find(
+  // Lift insight hook to parent — persists across step navigation
+  const {
+    data: insight,
+    loading: insightLoading,
+    error: insightError,
+    generate: fetchInsight,
+  } = useAgent<HabitInsightResult>("/api/agent/habit-insight");
+
+  useEffect(() => {
+    if (selectedHabitId) {
+      fetchInsight({ habitId: selectedHabitId });
+    }
+  }, [selectedHabitId, fetchInsight]);
+
+  const selectedHabit = allHabitCandidates.find(
     (h) => h.id === selectedHabitId
   );
 
   function handleSelectHabit(id: string) {
     setSelectedHabitId(id);
-    const habit = analysis.habitCandidates.find((h) => h.id === id);
+    const habit = allHabitCandidates.find((h) => h.id === id);
     if (habit) {
       setConfirmedIds(new Set(habit.transactionIds));
     }
@@ -82,8 +108,16 @@ export default function HabitsPage() {
   return (
     <div className="min-h-screen bg-ws-off-white">
       <div className="mx-auto max-w-[654px] px-4 py-6">
+        {/* Back to Dashboard */}
+        <Link
+          href="/"
+          className="text-sm text-ws-grey hover:text-ws-charcoal transition-colors"
+        >
+          &larr; Back to Dashboard
+        </Link>
+
         {/* Progress indicator */}
-        <div className="flex gap-1.5 mb-8">
+        <div className="flex gap-1.5 mb-8 mt-4">
           {Array.from({ length: STEP_COUNT }, (_, i) => (
             <div
               key={i}
@@ -116,7 +150,7 @@ export default function HabitsPage() {
 
           {currentStep === 1 && (
             <HabitSelectionStep
-              habits={analysis.habitCandidates}
+              habits={allHabitCandidates}
               selectedHabitId={selectedHabitId}
               setSelectedHabitId={handleSelectHabit}
               onBack={goBack}
@@ -130,6 +164,9 @@ export default function HabitsPage() {
               allTransactions={txns}
               confirmedIds={confirmedIds}
               setConfirmedIds={setConfirmedIds}
+              insight={insight}
+              insightLoading={insightLoading}
+              insightError={insightError}
               onBack={goBack}
               onContinue={goNext}
             />
