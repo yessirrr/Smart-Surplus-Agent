@@ -61,7 +61,6 @@ export default function DashboardPage() {
             analysis.surplusSummary.averageMonthlyPotentialSurplus -
             analysis.surplusSummary.averageMonthlySurplus
           }
-          topHabits={analysis.habitCandidates.slice(0, 3)}
         />
       </div>
       <SectionHeader title="Recent Transactions" />

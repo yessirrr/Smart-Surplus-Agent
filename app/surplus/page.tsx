@@ -42,6 +42,15 @@ export default function SurplusPage() {
     });
   }, []);
 
+  const selectAllHabits = useCallback(() => {
+    setSelectedHabitIds((prev) => {
+      if (prev.size === habitCandidates.length) {
+        return new Set<string>();
+      }
+      return new Set(habitCandidates.map((h) => h.id));
+    });
+  }, [habitCandidates]);
+
   // Pre-compute per-month spend for each habit (stable reference)
   const habitMonthlySpend = useMemo(() => {
     const result = new Map<string, Map<string, number>>();
@@ -124,6 +133,7 @@ export default function SurplusPage() {
             habits={habitCandidates}
             selectedIds={selectedHabitIds}
             onToggle={toggleHabit}
+            onSelectAll={selectAllHabits}
           />
         </div>
 

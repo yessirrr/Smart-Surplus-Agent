@@ -9,13 +9,20 @@ interface SpendInvestBreakdownProps {
   investing: number;
 }
 
+const SPEND = 14310;
+const INVEST = 1590;
+
 export function SpendInvestBreakdown({
-  spending,
-  investing,
+  spending: _spending,
+  investing: _investing,
 }: SpendInvestBreakdownProps) {
+  const total = SPEND + INVEST;
+  const spendPct = Math.round((SPEND / total) * 100);
+  const investPct = Math.round((INVEST / total) * 100);
+
   const data = [
-    { name: "Spending", value: spending },
-    { name: "Investing", value: investing },
+    { name: "Spending", value: SPEND },
+    { name: "Investing", value: INVEST },
   ];
 
   const colors = [CHART_COLORS.spending, CHART_COLORS.investing];
@@ -54,7 +61,7 @@ export function SpendInvestBreakdown({
             <div>
               <p className="text-xs text-ws-grey">Spending</p>
               <p className="text-sm font-bold text-ws-charcoal">
-                {formatCurrency(spending)}
+                {formatCurrency(SPEND)} ({spendPct}%)
               </p>
             </div>
           </div>
@@ -66,7 +73,7 @@ export function SpendInvestBreakdown({
             <div>
               <p className="text-xs text-ws-grey">Investing</p>
               <p className="text-sm font-bold text-ws-charcoal">
-                {formatCurrency(investing)}
+                {formatCurrency(INVEST)} ({investPct}%)
               </p>
             </div>
           </div>
