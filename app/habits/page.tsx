@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
@@ -8,14 +8,37 @@ import type { Transaction, UserProfile, HabitIntensity } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
 import { useAgent } from "@/lib/agent/use-agent";
 import type { HabitInsightResult } from "@/lib/agent/skills/habit-insight";
+import type { GoalInsightResult } from "@/lib/agent/skills/goal-insight";
 import { buildRecurringHabit } from "@/lib/utils/build-recurring-habit";
 import { ProfileStep } from "@/components/habits/ProfileStep";
 import { HabitSelectionStep } from "@/components/habits/HabitSelectionStep";
 import { TransactionReviewStep } from "@/components/habits/TransactionReviewStep";
 import { GoalStep } from "@/components/habits/GoalStep";
+import { SubscriptionGoalStep } from "@/components/habits/SubscriptionGoalStep";
 import { SummaryStep } from "@/components/habits/SummaryStep";
 
 const STEP_COUNT = 5;
+
+const VICE_CATEGORIES = new Set(["vaping", "personal_vices"]);
+
+function getMultiplier(intensity: HabitIntensity, isVice: boolean): number {
+  if (intensity === "gentle") return 0.25;
+  if (intensity === "standard") return 0.5;
+  return isVice ? 1 : 0.75;
+}
+
+function getReductionPercent(intensity: HabitIntensity, isVice: boolean): number {
+  if (intensity === "gentle") return 25;
+  if (intensity === "standard") return 50;
+  return isVice ? 100 : 75;
+}
+
+function computeFiveYear(monthlyAmount: number): number {
+  if (monthlyAmount <= 0) return 0;
+  const r = 0.07 / 12;
+  const n = 60;
+  return monthlyAmount * ((Math.pow(1 + r, n) - 1) / r);
+}
 
 export default function HabitsPage() {
   const profile = userProfile as UserProfile;
@@ -66,7 +89,11 @@ export default function HabitsPage() {
   // Step 3: Goal intensity
   const [intensity, setIntensity] = useState<HabitIntensity>("standard");
 
-  // Lift insight hook to parent — persists across step navigation
+  // Step 3 (subscription variant): cancel & reinvest state
+  const [canceledMerchants, setCanceledMerchants] = useState<Set<string>>(new Set());
+  const [selectedFund, setSelectedFund] = useState<string>("S&P 500 Index");
+
+  // Lift habit insight hook to parent — persists across step navigation
   const {
     data: insight,
     loading: insightLoading,
@@ -80,9 +107,91 @@ export default function HabitsPage() {
     }
   }, [selectedHabitId, fetchInsight]);
 
+  // Goal insight hook — fetches when intensity or selected habit changes
+  const {
+    data: goalInsight,
+    loading: goalInsightLoading,
+    error: goalInsightError,
+    generate: fetchGoalInsight,
+  } = useAgent<GoalInsightResult>("/api/agent/goal-insight");
+
   const selectedHabit = allHabitCandidates.find(
     (h) => h.id === selectedHabitId
   );
+
+  const isSubscription = selectedHabit?.category === "subscriptions";
+
+  // Fetch goal insight when intensity or habit changes
+  const fetchGoalInsightForHabit = useCallback(() => {
+    if (!selectedHabit) return;
+
+    if (isSubscription) {
+      // Subscription-specific payload
+      fetchGoalInsight({
+        habitName: selectedHabit.name,
+        category: "subscriptions",
+        currentWeeklyFrequency: 0,
+        avgCostPerOccurrence: 0,
+        selectedIntensity: "cancel",
+        reductionPercent: 100,
+        newWeeklyFrequency: 0,
+        monthlySavings: selectedHabit.metrics.monthlySpend,
+        yearlySavings: selectedHabit.metrics.yearlyProjection,
+        fiveYearInvestmentValue: computeFiveYear(selectedHabit.metrics.monthlySpend),
+      });
+    } else {
+      const isVice = VICE_CATEGORIES.has(selectedHabit.category);
+      const multiplier = getMultiplier(intensity, isVice);
+      const reductionPercent = getReductionPercent(intensity, isVice);
+      const weeklyFreq = selectedHabit.metrics.weeklyFrequency;
+      const monthlySavings = selectedHabit.metrics.monthlySpend * multiplier;
+      const newWeeklyFrequency = weeklyFreq * (1 - multiplier);
+      const avgCost =
+        weeklyFreq > 0
+          ? selectedHabit.metrics.monthlySpend / (weeklyFreq * 4.33)
+          : 0;
+
+      fetchGoalInsight({
+        habitName: selectedHabit.name,
+        category: selectedHabit.category,
+        currentWeeklyFrequency: weeklyFreq,
+        avgCostPerOccurrence: avgCost,
+        selectedIntensity: intensity,
+        reductionPercent,
+        newWeeklyFrequency,
+        monthlySavings,
+        yearlySavings: monthlySavings * 12,
+        fiveYearInvestmentValue: computeFiveYear(monthlySavings),
+      });
+    }
+  }, [selectedHabit, intensity, isSubscription, fetchGoalInsight]);
+
+  // Trigger goal insight fetch on intensity change or habit selection
+  useEffect(() => {
+    if (selectedHabitId) {
+      fetchGoalInsightForHabit();
+    }
+  }, [selectedHabitId, intensity, fetchGoalInsightForHabit]);
+
+  // Compute canceled amount for subscription summary
+  const canceledAmount = useMemo(() => {
+    if (!selectedHabit || !isSubscription) return 0;
+    const txnIds = new Set(selectedHabit.transactionIds);
+    const matchingTxns = txns.filter((t) => txnIds.has(t.id));
+    const merchantTotals = new Map<string, number>();
+    for (const txn of matchingTxns) {
+      merchantTotals.set(
+        txn.merchant,
+        (merchantTotals.get(txn.merchant) ?? 0) + Math.abs(txn.amount)
+      );
+    }
+    const monthsActive = Math.max(selectedHabit.metrics.monthsActive, 1);
+    let total = 0;
+    for (const merchant of canceledMerchants) {
+      total += (merchantTotals.get(merchant) ?? 0) / monthsActive;
+    }
+    return total;
+  }, [selectedHabit, isSubscription, canceledMerchants, txns]);
 
   function handleSelectHabit(id: string) {
     setSelectedHabitId(id);
@@ -90,6 +199,9 @@ export default function HabitsPage() {
     if (habit) {
       setConfirmedIds(new Set(habit.transactionIds));
     }
+    // Reset subscription state when selecting a new habit
+    setCanceledMerchants(new Set());
+    setSelectedFund("S&P 500 Index");
   }
 
   function goNext() {
@@ -173,13 +285,32 @@ export default function HabitsPage() {
           )}
 
           {currentStep === 3 && selectedHabit && (
-            <GoalStep
-              habit={selectedHabit}
-              intensity={intensity}
-              setIntensity={setIntensity}
-              onBack={goBack}
-              onContinue={goNext}
-            />
+            isSubscription ? (
+              <SubscriptionGoalStep
+                habit={selectedHabit}
+                allTransactions={txns}
+                canceledMerchants={canceledMerchants}
+                setCanceledMerchants={setCanceledMerchants}
+                selectedFund={selectedFund}
+                setSelectedFund={setSelectedFund}
+                goalInsight={goalInsight}
+                goalInsightLoading={goalInsightLoading}
+                goalInsightError={goalInsightError}
+                onBack={goBack}
+                onContinue={goNext}
+              />
+            ) : (
+              <GoalStep
+                habit={selectedHabit}
+                intensity={intensity}
+                setIntensity={setIntensity}
+                goalInsight={goalInsight}
+                goalInsightLoading={goalInsightLoading}
+                goalInsightError={goalInsightError}
+                onBack={goBack}
+                onContinue={goNext}
+              />
+            )
           )}
 
           {currentStep === 4 && selectedHabit && (
@@ -187,6 +318,10 @@ export default function HabitsPage() {
               habit={selectedHabit}
               intensity={intensity}
               confirmedCount={confirmedIds.size}
+              isSubscription={isSubscription}
+              canceledMerchants={canceledMerchants}
+              canceledAmount={canceledAmount}
+              selectedFund={selectedFund}
             />
           )}
         </div>
