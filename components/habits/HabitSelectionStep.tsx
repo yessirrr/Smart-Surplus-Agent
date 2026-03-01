@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import type { HabitCandidate } from "@/lib/types";
-import { useAgent, type HabitInsightResult } from "@/lib/agent";
+import { useAgent } from "@/lib/agent/use-agent";
+import type { HabitInsightResult } from "@/lib/agent/skills/habit-insight";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 

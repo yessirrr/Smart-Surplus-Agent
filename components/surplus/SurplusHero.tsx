@@ -11,7 +11,8 @@ import {
   ReferenceLine,
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
-import { useAgent, type SurplusNarrativeResult } from "@/lib/agent";
+import { useAgent } from "@/lib/agent/use-agent";
+import type { SurplusNarrativeResult } from "@/lib/agent/skills/surplus-narrative";
 
 export interface ChartDataPoint {
   month: string;

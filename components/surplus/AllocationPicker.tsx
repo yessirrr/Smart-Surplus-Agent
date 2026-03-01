@@ -11,7 +11,8 @@ import {
 } from "recharts";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
-import { useAgent, type AllocationReasoningResult } from "@/lib/agent";
+import { useAgent } from "@/lib/agent/use-agent";
+import type { AllocationReasoningResult } from "@/lib/agent/skills/allocation-reasoning";
 
 type PlanId = "conservative" | "balanced" | "growth";
 
@@ -144,7 +145,7 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
       </h2>
       <p className="text-sm text-ws-grey mt-1">
         Choose how you&apos;d like to allocate your potential savings. This is
-        illustrative — not investment advice.
+        illustrative - not investment advice.
       </p>
 
       {/* Plan cards */}
