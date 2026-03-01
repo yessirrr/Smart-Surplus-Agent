@@ -68,8 +68,7 @@ export function HabitToggleBar({
         </p>
         <button
           onClick={onSelectAll}
-          disabled={selectedIds.size === habits.length}
-          className="text-xs font-medium text-ws-grey hover:text-ws-charcoal transition-colors disabled:opacity-40 disabled:cursor-default"
+          className="text-xs font-medium text-ws-grey hover:text-ws-charcoal transition-colors"
         >
           Select all
         </button>
