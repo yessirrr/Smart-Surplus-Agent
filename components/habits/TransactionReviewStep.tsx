@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
@@ -30,18 +30,13 @@ export function TransactionReviewStep({
   onBack,
   onContinue,
 }: TransactionReviewStepProps) {
-  const [showAll, setShowAll] = useState(false);
-
   // Get habit transactions sorted newest-first
   const habitTxnIds = new Set(habit.transactionIds);
   const habitTransactions = allTransactions
     .filter((t) => habitTxnIds.has(t.id))
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  const displayLimit = 50;
-  const visibleTransactions = showAll
-    ? habitTransactions
-    : habitTransactions.slice(0, displayLimit);
+  const visibleTransactions = habitTransactions;
 
   // Group visible transactions by merchant
   const merchantGroups = useMemo(() => {
@@ -59,9 +54,9 @@ export function TransactionReviewStep({
     });
   }, [visibleTransactions]);
 
-  // All merchants expanded by default
+  // All merchants collapsed by default
   const [expandedMerchants, setExpandedMerchants] = useState<Set<string>>(
-    () => new Set(merchantGroups.map(([name]) => name))
+    () => new Set<string>()
   );
 
   const confirmedCount = habitTransactions.filter((t) =>
@@ -134,7 +129,7 @@ export function TransactionReviewStep({
                   onClick={() => toggleMerchant(merchant)}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-ws-off-white transition-colors"
                 >
-                  <StockLogoWithPopover merchant={merchant} size={32} />
+                  <StockLogoWithPopover merchant={merchant} size="sm" />
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-bold text-ws-charcoal truncate">
                       {merchant}
@@ -180,14 +175,6 @@ export function TransactionReviewStep({
           })}
         </div>
 
-        {!showAll && habitTransactions.length > displayLimit && (
-          <button
-            onClick={() => setShowAll(true)}
-            className="w-full text-xs font-bold text-ws-charcoal py-3 border-t border-ws-border hover:bg-ws-light-grey transition-colors"
-          >
-            Show all {habitTransactions.length} transactions
-          </button>
-        )}
       </div>
 
       {/* Confirmed summary */}
@@ -260,3 +247,4 @@ function InsightSkeleton() {
     </div>
   );
 }
+

@@ -9,6 +9,8 @@ import { AgentInsightCard } from "@/components/AgentInsightCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TransactionList } from "@/components/TransactionList";
 
+const RECENT_TXN_LIMIT = 20;
+
 export default function DashboardPage() {
   const profile = userProfile as UserProfile;
   const txns = transactions as Transaction[];
@@ -41,10 +43,10 @@ export default function DashboardPage() {
   // Extract first name from full name
   const firstName = profile.name.split(" ")[0];
 
-  // Recent transactions: last 20, sorted newest first
+  // Recent transactions sorted newest first
   const recentTransactions = [...txns]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 20);
+    .slice(0, RECENT_TXN_LIMIT);
 
   return (
     <div className="pb-12">

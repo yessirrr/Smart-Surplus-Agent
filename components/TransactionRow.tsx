@@ -1,4 +1,4 @@
-import type { Transaction } from "@/lib/types";
+﻿import type { Transaction } from "@/lib/types";
 import { CategoryIcon } from "./CategoryIcon";
 import { StockLogoWithPopover } from "./market/StockLogoWithPopover";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -15,7 +15,7 @@ export function TransactionRow({ transaction }: TransactionRowProps) {
   return (
     <div className="flex items-center gap-3 py-3">
       {hasStock ? (
-        <StockLogoWithPopover merchant={transaction.merchant} size={40} />
+        <StockLogoWithPopover merchant={transaction.merchant} size="md" />
       ) : (
         <CategoryIcon category={transaction.category} />
       )}
@@ -38,3 +38,4 @@ export function TransactionRow({ transaction }: TransactionRowProps) {
     </div>
   );
 }
+

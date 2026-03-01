@@ -1,11 +1,17 @@
 import type { RecurringPattern, HabitCandidate, Transaction } from "@/lib/types";
 
+// Only include these merchants in the "Monthly Subscriptions" habit
+const SUBSCRIPTION_WHITELIST = new Set(["Netflix", "Spotify", "Apple"]);
+
 export function buildRecurringHabit(
   patterns: RecurringPattern[],
   transactions: Transaction[]
 ): HabitCandidate | null {
   const monthly = patterns.filter(
-    (p) => p.frequency === "monthly" && p.isLikelySubscription
+    (p) =>
+      p.frequency === "monthly" &&
+      p.isLikelySubscription &&
+      SUBSCRIPTION_WHITELIST.has(p.merchant)
   );
 
   if (monthly.length === 0) return null;
