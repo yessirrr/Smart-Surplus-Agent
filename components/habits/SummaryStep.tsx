@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { HabitCandidate, HabitIntensity } from "@/lib/types";
+import { getReductionPercentForIntensity } from "@/lib/habits/goal-options";
 import { formatCurrency } from "@/lib/utils";
 
 interface SummaryStepProps {
@@ -14,19 +15,11 @@ interface SummaryStepProps {
   selectedFund?: string;
 }
 
-const VICE_CATEGORIES = new Set(["vaping", "personal_vices"]);
-
 const INTENSITY_LABELS: Record<HabitIntensity, string> = {
   gentle: "Gentle",
   standard: "Standard",
   strict: "Strict",
 };
-
-function getMultiplier(intensity: HabitIntensity, isVice: boolean): number {
-  if (intensity === "gentle") return 0.25;
-  if (intensity === "standard") return 0.5;
-  return isVice ? 1 : 0.75;
-}
 
 function computeFiveYear(monthlyAmount: number): number {
   if (monthlyAmount <= 0) return 0;
@@ -55,8 +48,8 @@ export function SummaryStep({
     );
   }
 
-  const isVice = VICE_CATEGORIES.has(habit.category);
-  const multiplier = getMultiplier(intensity, isVice);
+  const reductionPercent = getReductionPercentForIntensity(habit, intensity);
+  const multiplier = reductionPercent / 100;
   const monthlySavings = habit.metrics.monthlySpend * multiplier;
   const yearlySavings = monthlySavings * 12;
   const targetSpend = habit.metrics.monthlySpend - monthlySavings;
@@ -83,7 +76,7 @@ export function SummaryStep({
           </span>
         </div>
 
-        {/* Monthly savings — hero number */}
+        {/* Monthly savings â€” hero number */}
         <p className="text-3xl font-bold text-ws-green mt-4">
           {formatCurrency(monthlySavings)}
           <span className="text-sm font-normal text-ws-grey">/month</span>
@@ -190,7 +183,7 @@ function SubscriptionSummary({
           ))}
         </div>
 
-        {/* Freed amount — hero number */}
+        {/* Freed amount â€” hero number */}
         <p className="text-3xl font-bold text-ws-green mt-4">
           {formatCurrency(canceledAmount)}
           <span className="text-sm font-normal text-ws-grey">/month freed</span>

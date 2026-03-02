@@ -1,99 +1,38 @@
 "use client";
 
 import type { HabitCandidate, HabitIntensity } from "@/lib/types";
-import type { GoalInsightResult } from "@/lib/agent/skills/goal-insight";
+import { buildGoalOptions, getReductionPercentForIntensity } from "@/lib/habits/goal-options";
+import {
+  generateBehaviorInsight,
+  type GoalBehaviorData,
+} from "@/lib/habits/generate-behavior-insight";
 import { formatCurrency } from "@/lib/utils";
 
 interface GoalStepProps {
   habit: HabitCandidate;
   intensity: HabitIntensity;
   setIntensity: (v: HabitIntensity) => void;
-  goalInsight: GoalInsightResult | null;
-  goalInsightLoading: boolean;
-  goalInsightError: string | null;
   onBack: () => void;
   onContinue: () => void;
-}
-
-const VICE_CATEGORIES = new Set(["vaping", "personal_vices"]);
-
-const BEHAVIOR_UNITS: Record<string, string> = {
-  food_delivery: "orders",
-  coffee: "coffees",
-  coffee_shops: "coffees",
-  vaping: "purchases",
-  alcohol: "purchases",
-  dining_out: "meals out",
-  impulse_shopping: "purchases",
-  shopping: "purchases",
-  rideshare: "rides",
-  entertainment: "purchases",
-  electronics: "purchases",
-  transportation: "trips",
-};
-
-function formatFrequency(freq: number, unit: string): string {
-  if (freq >= 3) {
-    const low = Math.floor(freq);
-    const high = Math.ceil(freq);
-    if (low === high) return `${low} ${unit} per week`;
-    return `${low}-${high} ${unit} per week`;
-  }
-  if (freq >= 1) {
-    const low = Math.floor(freq);
-    const high = Math.ceil(freq);
-    if (low === high) return `${low} ${unit} per week`;
-    return `${low}-${high} ${unit} per week`;
-  }
-  // Less than 1 per week — show monthly
-  const monthly = freq * 4.33;
-  const rounded = Math.round(monthly);
-  return `${Math.max(1, rounded)} ${unit} per month`;
 }
 
 export function GoalStep({
   habit,
   intensity,
   setIntensity,
-  goalInsight,
-  goalInsightLoading,
-  goalInsightError,
   onBack,
   onContinue,
 }: GoalStepProps) {
   const monthly = habit.metrics.monthlySpend;
-  const isVice = VICE_CATEGORIES.has(habit.category);
-  const weeklyFreq = habit.metrics.weeklyFrequency;
-  const unit = BEHAVIOR_UNITS[habit.category] ?? "times";
-  const avgCost = weeklyFreq > 0 ? monthly / (weeklyFreq * 4.33) : 0;
+  const options = buildGoalOptions(habit);
+  const selectedReduction = getReductionPercentForIntensity(habit, intensity);
 
-  const options: Array<{
-    value: HabitIntensity;
-    title: string;
-    description: string;
-    multiplier: number;
-    recommended?: boolean;
-  }> = [
-    {
-      value: "gentle",
-      title: "Reduce by 25%",
-      description: "Small changes, sustainable pace",
-      multiplier: 0.25,
-    },
-    {
-      value: "standard",
-      title: "Reduce by 50%",
-      description: "Meaningful reduction, balanced approach",
-      multiplier: 0.5,
-      recommended: true,
-    },
-    {
-      value: "strict",
-      title: isVice ? "Eliminate completely" : "Reduce by 75%",
-      description: "Maximum commitment, maximum savings",
-      multiplier: isVice ? 1 : 0.75,
-    },
-  ];
+  const goalData: GoalBehaviorData = {
+    habitName: habit.name,
+    category: habit.category,
+    monthlySpend: habit.metrics.monthlySpend,
+    weeklyFrequency: habit.metrics.weeklyFrequency,
+  };
 
   return (
     <div>
@@ -115,19 +54,17 @@ export function GoalStep({
       <div className="mt-6 flex flex-col gap-3">
         {options.map((opt) => {
           const selected = intensity === opt.value;
-          const savingsMonthly = monthly * opt.multiplier;
+          const savingsMonthly = monthly * (opt.reductionPercent / 100);
           const savingsYearly = savingsMonthly * 12;
-          const newFreq = weeklyFreq * (1 - opt.multiplier);
-          const isEliminate = opt.multiplier === 1;
 
           return (
             <button
               key={opt.value}
               onClick={() => setIntensity(opt.value)}
-              className={`relative text-left bg-ws-white rounded-[8px] p-4 transition-all ${
+              className={`relative text-left bg-ws-white rounded-[8px] p-4 border-2 cursor-pointer transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ws-charcoal ${
                 selected
-                  ? "border-2 border-ws-charcoal shadow-[0_2px_8px_rgba(0,0,0,0.1)]"
-                  : "border border-ws-border shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                  ? "border-ws-charcoal shadow-[0_4px_12px_rgba(0,0,0,0.12)]"
+                  : "border-ws-border shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:border-ws-charcoal/40 hover:bg-ws-off-white hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
               }`}
             >
               {opt.recommended && (
@@ -144,61 +81,12 @@ export function GoalStep({
                 </span>
               </p>
               <p className="text-xs text-ws-grey mt-1">{opt.description}</p>
-
-              {/* Behavioral translation */}
-              {weeklyFreq > 0 && (
-                <>
-                  <div className="border-t border-ws-border mt-3 pt-3">
-                    <p className="text-[10px] text-ws-grey font-bold uppercase tracking-wide">
-                      What this looks like:
-                    </p>
-                    <p className="text-sm text-ws-charcoal mt-1.5">
-                      Now: ~{formatFrequency(weeklyFreq, unit)}
-                    </p>
-                    <p className="text-sm text-ws-green mt-0.5">
-                      {isEliminate
-                        ? `Target: None \u2014 fully eliminated`
-                        : `Target: ~${formatFrequency(newFreq, unit)}`}
-                    </p>
-                    {avgCost > 0 && (
-                      <p className="text-xs text-ws-grey mt-1">
-                        ~{formatCurrency(avgCost)} per {unit.replace(/s$/, "")}
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
             </button>
           );
         })}
       </div>
 
-      {/* Odysseus Insight */}
-      <div className="mt-4">
-        {goalInsightLoading && <InsightSkeleton />}
-        {!goalInsightLoading && goalInsight && !goalInsightError && (
-          <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm">&#10024;</span>
-              <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
-                Odysseus Insight
-              </p>
-            </div>
-            <p className="text-sm text-ws-charcoal leading-relaxed">
-              {goalInsight.behaviorFraming}
-            </p>
-            <p className="text-xs text-ws-green mt-2 italic leading-relaxed">
-              {goalInsight.motivationalNudge}
-            </p>
-            <p className="text-xs text-ws-grey mt-2 leading-relaxed">
-              {goalInsight.investmentHook}
-            </p>
-          </div>
-        )}
-        {!goalInsightLoading && goalInsightError && (
-          <p className="text-xs text-ws-grey mt-2">Insight unavailable</p>
-        )}
-      </div>
+      <OdysseusInsight goalData={goalData} selectedReduction={selectedReduction} />
 
       <div className="flex gap-3 mt-6">
         <button
@@ -218,16 +106,25 @@ export function GoalStep({
   );
 }
 
-function InsightSkeleton() {
+function OdysseusInsight({
+  goalData,
+  selectedReduction,
+}: {
+  goalData: GoalBehaviorData;
+  selectedReduction: number;
+}) {
+  const { body, kicker } = generateBehaviorInsight(goalData, selectedReduction);
+
   return (
-    <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5 animate-pulse">
+    <div className="mt-4 bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-4 h-4 bg-ws-light-grey rounded" />
-        <div className="w-24 h-3 bg-ws-light-grey rounded" />
+        <span className="text-sm">&#10024;</span>
+        <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
+          Odysseus Insight
+        </p>
       </div>
-      <div className="w-3/4 h-4 bg-ws-light-grey rounded" />
-      <div className="w-full h-3 bg-ws-light-grey rounded mt-3" />
-      <div className="w-2/3 h-3 bg-ws-light-grey rounded mt-3" />
+      <p className="text-sm text-ws-charcoal leading-relaxed">{body}</p>
+      <p className="text-xs text-ws-green mt-2 italic leading-relaxed">{kicker}</p>
     </div>
   );
 }

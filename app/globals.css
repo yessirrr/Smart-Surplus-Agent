@@ -62,9 +62,14 @@
 }
 
 /* ---- Base Styles ---- */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   color: var(--color-primary-text);
   background-color: var(--color-bg-default);
+  overflow-y: scroll;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { Transaction, HabitCandidate } from "@/lib/types";
 import type { HabitInsightResult } from "@/lib/agent/skills/habit-insight";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -149,8 +150,16 @@ export function TransactionReviewStep({
                 </button>
 
                 {/* Transactions within merchant */}
-                {isExpanded &&
-                  txns.map((txn) => (
+                <AnimatePresence initial={false}>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0, y: 4 }}
+                      animate={{ height: "auto", opacity: 1, y: 0 }}
+                      exit={{ height: 0, opacity: 0, y: 4 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      style={{ overflow: "hidden" }}
+                    >
+                      {txns.map((txn) => (
                     <label
                       key={txn.id}
                       className="flex items-center gap-3 px-4 py-2.5 pl-8 cursor-pointer hover:bg-ws-off-white transition-colors border-t border-ws-border/50"
@@ -171,6 +180,9 @@ export function TransactionReviewStep({
                       </p>
                     </label>
                   ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             );
           })}

@@ -37,7 +37,7 @@ export function HabitSelectionStep({
               className={`text-left bg-ws-white rounded-[8px] p-4 transition-all ${
                 selected
                   ? "border-2 border-ws-charcoal shadow-[0_2px_8px_rgba(0,0,0,0.1)]"
-                  : "border border-ws-border shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:border-ws-charcoal/30"
+                  : "border-2 border-ws-border shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:border-ws-charcoal/30"
               }`}
             >
               <p className="text-sm font-bold text-ws-charcoal">
