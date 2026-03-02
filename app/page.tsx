@@ -2,10 +2,12 @@ import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
+import { buildCashflowSnapshot } from "@/lib/domain/cashflow-model";
 import { Header } from "@/components/Header";
 import { BalanceCard } from "@/components/BalanceCard";
 import { SpendInvestBreakdown } from "@/components/SpendInvestBreakdown";
 import { AgentInsightCard } from "@/components/AgentInsightCard";
+import { DecisionMode } from "@/components/DecisionMode";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TransactionList } from "@/components/TransactionList";
 
@@ -43,6 +45,9 @@ export default function DashboardPage() {
   // Extract first name from full name
   const firstName = profile.name.split(" ")[0];
 
+  // Cashflow snapshot for Decision Mode
+  const snapshot = buildCashflowSnapshot(analysis.surplusSummary, profile, txns);
+
   // Recent transactions sorted newest first
   const recentTransactions = [...txns]
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -64,6 +69,7 @@ export default function DashboardPage() {
             analysis.surplusSummary.averageMonthlySurplus
           }
         />
+        <DecisionMode snapshot={snapshot} />
       </div>
       <SectionHeader title="Recent Transactions" />
       <TransactionList transactions={recentTransactions} />

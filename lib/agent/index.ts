@@ -4,6 +4,7 @@ export { generateSurplusNarrative } from "./skills/surplus-narrative";
 export { generateAllocationReasoning } from "./skills/allocation-reasoning";
 export { generateGoalInsight } from "./skills/goal-insight";
 export { generateCommitmentSummary } from "./skills/commitment-summary";
+export { generateDecisionExplanation } from "./skills/decision-explanation";
 
 // Skill result types
 export type { HabitInsightResult } from "./skills/habit-insight";
@@ -14,6 +15,7 @@ export type {
 } from "./skills/allocation-reasoning";
 export type { GoalInsightResult, GoalInsightInput } from "./skills/goal-insight";
 export type { CommitmentSummaryResult, CommitmentSummaryInput } from "./skills/commitment-summary";
+export type { DecisionExplanationResult, DecisionExplanationInput } from "./skills/decision-explanation";
 
 // Client hook
 export { useAgent } from "./use-agent";
