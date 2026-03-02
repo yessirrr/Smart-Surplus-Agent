@@ -18,6 +18,10 @@ export interface DecisionExplanationInput {
   bufferMonths: number;
   investmentAtRisk: boolean;
   streakAtRisk: boolean;
+  cadence: "one_time" | "weekly" | "monthly" | null;
+  horizon: "today" | "this_week" | "this_month" | null;
+  deltaAt90Days: number;
+  assumption: string;
 }
 
 const SYSTEM_PROMPT = `You are Odysseus, a personal finance AI. The user is considering a purchase. You have received the structured output of a financial simulation. Your job is to explain the impact clearly and briefly.
@@ -30,6 +34,8 @@ Rules:
 - For "safe" verdicts: be reassuring and brief. Don't over-explain.
 - For "tight" verdicts: acknowledge it's doable but flag the tradeoff.
 - For "risky" verdicts: be honest about the consequence without being preachy.
+- When cadence is "weekly" or "monthly", frame the impact as recurring, not one-time.
+- Reference the deltaAt90Days value to show long-term portfolio divergence when it is meaningful (> $20).
 - Each field should be 1-2 sentences maximum.
 - Output ONLY valid JSON matching the schema. No markdown, no preamble.`;
 
@@ -48,25 +54,38 @@ const JSON_SCHEMA = {
   },
 };
 
+function cadenceLabel(cadence: string | null): string {
+  if (cadence === "weekly") return "/week";
+  if (cadence === "monthly") return "/month";
+  return "";
+}
+
+function divergenceNote(input: DecisionExplanationInput): string {
+  if (input.deltaAt90Days > 20) {
+    return ` Over 90 days, that's ~$${Math.round(input.deltaAt90Days)} less in your portfolio.`;
+  }
+  return "";
+}
+
 const FALLBACKS: Record<
   string,
   (input: DecisionExplanationInput) => DecisionExplanationResult
 > = {
   safe: (input) => ({
     headline: "You're clear.",
-    explanation: `$${input.proposedAmount} is well within your free cash. Your surplus stays positive and your investment plan stays on track. ${input.daysUntilPay} days until your next payday — no pressure.`,
+    explanation: `$${input.proposedAmount}${cadenceLabel(input.cadence)} is well within your free cash. Your surplus stays positive and your investment plan stays on track.${divergenceNote(input)}`,
     suggestion: "No adjustments needed.",
   }),
   tight: (input) => ({
     headline: "This one's tight.",
-    explanation: `You can cover $${input.proposedAmount}, but it leaves you with $${Math.round(input.freeCashAfter)} until payday in ${input.daysUntilPay} days. ${input.investmentAtRisk ? "This might reduce your investment contribution this period." : "Your investment plan should still hold."}`,
+    explanation: `You can cover $${input.proposedAmount}${cadenceLabel(input.cadence)}, but it leaves you with $${Math.round(input.freeCashAfter)} until payday in ${input.daysUntilPay} days.${input.investmentAtRisk ? " This might reduce your investment contribution this period." : ""}${divergenceNote(input)}`,
     suggestion: input.investmentAtRisk
       ? "Consider splitting this across two pay periods."
       : "You'll want to watch your spending for the rest of the week.",
   }),
   risky: (input) => ({
     headline: "This would stretch things.",
-    explanation: `$${input.proposedAmount} pushes your free cash negative before your next payday. ${input.streakAtRisk ? "Your investment streak would also be impacted. " : ""}Your buffer drops to ${input.bufferMonths.toFixed(1)} months of essentials.`,
+    explanation: `$${input.proposedAmount}${cadenceLabel(input.cadence)} pushes your free cash negative before your next payday.${input.streakAtRisk ? " Your investment streak would also be impacted." : ""} Your buffer drops to ${input.bufferMonths.toFixed(1)} months of essentials.${divergenceNote(input)}`,
     suggestion:
       "A smaller amount or waiting until after payday would keep your plan intact.",
   }),

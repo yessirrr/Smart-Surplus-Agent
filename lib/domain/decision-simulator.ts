@@ -1,4 +1,13 @@
 import type { CashflowSnapshot } from "./cashflow-model";
+import type { SpendCadence } from "@/lib/agent/skills/intent-parser";
+
+export interface DivergenceProjection {
+  weeks: number;
+  baseline: number[];
+  withSpend: number[];
+  deltaAt90Days: number;
+  assumption: string;
+}
 
 export interface DecisionSimulation {
   proposedAmount: number;
@@ -115,5 +124,67 @@ export function simulateDecision(
     streakAtRisk,
     verdict,
     verdictReasons,
+  };
+}
+
+const PROJECTION_WEEKS = 12;
+const ANNUAL_RATE = 0.07;
+const WEEKLY_RATE = ANNUAL_RATE / 52;
+
+export function projectDivergence(
+  amount: number,
+  cadence: SpendCadence,
+  snapshot: CashflowSnapshot
+): DivergenceProjection {
+  const weeklyContribution = Math.max(snapshot.potentialSurplus / 4, 0);
+
+  // Build hit schedule based on cadence
+  const hitWeeks = new Set<number>();
+  if (cadence === "one_time") {
+    hitWeeks.add(0);
+  } else if (cadence === "weekly") {
+    for (let w = 0; w < PROJECTION_WEEKS; w++) hitWeeks.add(w);
+  } else if (cadence === "monthly") {
+    hitWeeks.add(0);
+    hitWeeks.add(4);
+    hitWeeks.add(8);
+  }
+
+  const baseline: number[] = [];
+  const withSpend: number[] = [];
+
+  let baseAccum = 0;
+  let spendAccum = 0;
+
+  for (let w = 0; w < PROJECTION_WEEKS; w++) {
+    // Baseline: full contribution every week
+    baseAccum += weeklyContribution;
+    const baseValue = baseAccum * (1 + WEEKLY_RATE * (w + 1));
+    baseline.push(Math.round(baseValue * 100) / 100);
+
+    // With spend: contribution reduced on hit weeks
+    const reduction = hitWeeks.has(w) ? Math.min(amount, weeklyContribution) : 0;
+    spendAccum += Math.max(weeklyContribution - reduction, 0);
+    const spendValue = spendAccum * (1 + WEEKLY_RATE * (w + 1));
+    withSpend.push(Math.round(spendValue * 100) / 100);
+  }
+
+  const deltaAt90Days = baseline[PROJECTION_WEEKS - 1] - withSpend[PROJECTION_WEEKS - 1];
+
+  let assumption: string;
+  if (cadence === "weekly") {
+    assumption = `Assumes $${Math.round(amount)}/week`;
+  } else if (cadence === "monthly") {
+    assumption = `Assumes $${Math.round(amount)}/month`;
+  } else {
+    assumption = "Assumes one-time";
+  }
+
+  return {
+    weeks: PROJECTION_WEEKS,
+    baseline,
+    withSpend,
+    deltaAt90Days: Math.round(deltaAt90Days * 100) / 100,
+    assumption,
   };
 }

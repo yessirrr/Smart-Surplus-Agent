@@ -3,6 +3,7 @@
 import { useState, type FocusEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { AIPill } from "@/components/ai/AIPill";
 import { formatCurrency } from "@/lib/utils";
 
 interface AgentInsightCardProps {
@@ -44,7 +45,7 @@ export function AgentInsightCard({
   return (
     <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-6">
       <p className="text-sm font-bold text-ws-charcoal">
-        Odysseus detected {habitCount} spending habits
+        <AIPill label="Odysseus" size="sm" className="mr-1" /> detected {habitCount} spending habits
       </p>
       <p className="text-xs text-ws-grey mt-1">
         You could save up to {formatCurrency(monthlySavings)}/month by

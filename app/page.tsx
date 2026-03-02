@@ -5,9 +5,7 @@ import { analyzeTransactions } from "@/lib/domain";
 import { buildCashflowSnapshot } from "@/lib/domain/cashflow-model";
 import { Header } from "@/components/Header";
 import { BalanceCard } from "@/components/BalanceCard";
-import { SpendInvestBreakdown } from "@/components/SpendInvestBreakdown";
-import { AgentInsightCard } from "@/components/AgentInsightCard";
-import { DecisionMode } from "@/components/DecisionMode";
+import { DashboardAiStack } from "@/components/DashboardAiStack";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TransactionList } from "@/components/TransactionList";
 
@@ -57,20 +55,16 @@ export default function DashboardPage() {
     <div className="pb-12">
       <Header userName={firstName} />
       <BalanceCard balance={totalBalance} />
-      <div className="flex flex-col gap-4">
-        <SpendInvestBreakdown
-          spending={monthlySpending}
-          investing={monthlyInvesting}
-        />
-        <AgentInsightCard
-          habitCount={analysis.habitCandidates.length}
-          monthlySavings={
-            analysis.surplusSummary.averageMonthlyPotentialSurplus -
-            analysis.surplusSummary.averageMonthlySurplus
-          }
-        />
-        <DecisionMode snapshot={snapshot} />
-      </div>
+      <DashboardAiStack
+        spending={monthlySpending}
+        investing={monthlyInvesting}
+        habitCount={analysis.habitCandidates.length}
+        monthlySavings={
+          analysis.surplusSummary.averageMonthlyPotentialSurplus -
+          analysis.surplusSummary.averageMonthlySurplus
+        }
+        snapshot={snapshot}
+      />
       <SectionHeader title="Recent Transactions" />
       <TransactionList transactions={recentTransactions} />
     </div>

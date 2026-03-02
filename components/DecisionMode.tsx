@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { formatCurrency } from "@/lib/utils";
-import { simulateDecision } from "@/lib/domain/decision-simulator";
+import { simulateDecision, projectDivergence } from "@/lib/domain/decision-simulator";
 import { useAgent } from "@/lib/agent/use-agent";
 import type { CashflowSnapshot } from "@/lib/domain/cashflow-model";
-import type { DecisionSimulation } from "@/lib/domain/decision-simulator";
+import type { DecisionSimulation, DivergenceProjection } from "@/lib/domain/decision-simulator";
 import type { DecisionExplanationResult } from "@/lib/agent/skills/decision-explanation";
+import type { DecisionIntent, SpendCadence } from "@/lib/agent/skills/intent-parser";
 
 const REASON_LABELS: Record<string, string> = {
   fully_covered: "fully covered by free cash",
@@ -25,15 +26,30 @@ const VERDICT_CONFIG = {
   risky: { color: "text-ws-red", bg: "bg-ws-red", label: "Risky" },
 } as const;
 
+const CADENCE_LABELS: Record<string, string> = {
+  one_time: "One-time",
+  weekly: "Weekly",
+  monthly: "Monthly",
+};
+
+type Phase = "idle" | "parsing" | "clarifying" | "result";
+
 interface DecisionModeProps {
   snapshot: CashflowSnapshot;
 }
 
 export function DecisionMode({ snapshot }: DecisionModeProps) {
-  const [amount, setAmount] = useState("");
+  const [input, setInput] = useState("");
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [intent, setIntent] = useState<DecisionIntent | null>(null);
   const [simulation, setSimulation] = useState<DecisionSimulation | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [projection, setProjection] = useState<DivergenceProjection | null>(null);
   const [showReasoning, setShowReasoning] = useState(false);
+  const abortRef = useRef<AbortController | undefined>(undefined);
+
+  // Clarification state
+  const [clarifyAmount, setClarifyAmount] = useState("");
+  const [clarifyCadence, setClarifyCadence] = useState<SpendCadence | null>(null);
 
   const {
     data: explanation,
@@ -41,84 +57,219 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
     generate: fetchExplanation,
   } = useAgent<DecisionExplanationResult>("/api/agent/decision");
 
-  const handleAmountChange = useCallback((value: string) => {
-    // Strip non-numeric except decimal point
-    const cleaned = value.replace(/[^0-9.]/g, "");
-    // Prevent multiple decimal points
-    const parts = cleaned.split(".");
-    const sanitized =
-      parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
-    setAmount(sanitized);
-  }, []);
+  const runSimulation = useCallback(
+    (amount: number, cadence: SpendCadence, horizon: DecisionIntent["horizon"]) => {
+      const sim = simulateDecision(amount, snapshot);
+      const proj = projectDivergence(amount, cadence, snapshot);
+      setSimulation(sim);
+      setProjection(proj);
+      setPhase("result");
+      setShowReasoning(false);
 
-  const handleCheck = useCallback(() => {
-    const parsed = parseFloat(amount);
-    if (!parsed || parsed <= 0) return;
+      fetchExplanation({
+        proposedAmount: amount,
+        verdict: sim.verdict,
+        verdictReasons: sim.verdictReasons,
+        freeCashBefore: snapshot.freeCashUntilPay,
+        freeCashAfter: sim.newFreeCash,
+        daysUntilPay: snapshot.daysUntilNextPay,
+        surplusBefore: snapshot.currentSurplus,
+        surplusAfter: sim.newMonthlySurplus,
+        bufferMonths: sim.bufferMonths,
+        investmentAtRisk: sim.investmentAtRisk,
+        streakAtRisk: sim.streakAtRisk,
+        cadence,
+        horizon,
+        deltaAt90Days: proj.deltaAt90Days,
+        assumption: proj.assumption,
+      });
+    },
+    [snapshot, fetchExplanation]
+  );
 
-    const sim = simulateDecision(parsed, snapshot);
-    setSimulation(sim);
-    setExpanded(true);
-    setShowReasoning(false);
+  const handleSubmit = useCallback(async () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
 
-    fetchExplanation({
-      proposedAmount: parsed,
-      verdict: sim.verdict,
-      verdictReasons: sim.verdictReasons,
-      freeCashBefore: snapshot.freeCashUntilPay,
-      freeCashAfter: sim.newFreeCash,
-      daysUntilPay: snapshot.daysUntilNextPay,
-      surplusBefore: snapshot.currentSurplus,
-      surplusAfter: sim.newMonthlySurplus,
-      bufferMonths: sim.bufferMonths,
-      investmentAtRisk: sim.investmentAtRisk,
-      streakAtRisk: sim.streakAtRisk,
-    });
-  }, [amount, snapshot, fetchExplanation]);
+    // Cancel any in-flight parse
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setPhase("parsing");
+    setIntent(null);
+    setSimulation(null);
+    setProjection(null);
+
+    try {
+      const res = await fetch("/api/decision/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: trimmed }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error("Parse failed");
+      const parsed = (await res.json()) as DecisionIntent;
+
+      if (controller.signal.aborted) return;
+
+      setIntent(parsed);
+
+      if (parsed.needsClarification || parsed.amount === null) {
+        setClarifyAmount(parsed.amount !== null ? String(parsed.amount) : "");
+        setClarifyCadence(parsed.cadence);
+        setPhase("clarifying");
+        return;
+      }
+
+      // All resolved — run simulation
+      runSimulation(
+        parsed.amount,
+        parsed.cadence ?? "one_time",
+        parsed.horizon
+      );
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setPhase("idle");
+    }
+  }, [input, runSimulation]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") handleCheck();
+      if (e.key === "Enter") handleSubmit();
     },
-    [handleCheck]
+    [handleSubmit]
   );
 
-  const parsedAmount = parseFloat(amount);
-  const isDisabled = !parsedAmount || parsedAmount <= 0;
+  const handleClarifySubmit = useCallback(() => {
+    const amount = clarifyAmount ? parseFloat(clarifyAmount) : intent?.amount;
+    if (!amount || amount <= 0) return;
+
+    const cadence = clarifyCadence ?? intent?.cadence ?? "one_time";
+    runSimulation(amount, cadence, intent?.horizon ?? "this_week");
+  }, [clarifyAmount, clarifyCadence, intent, runSimulation]);
+
+  const handleReset = useCallback(() => {
+    setInput("");
+    setPhase("idle");
+    setIntent(null);
+    setSimulation(null);
+    setProjection(null);
+    setShowReasoning(false);
+  }, []);
+
+  const resolvedCadence = intent?.cadence ?? clarifyCadence ?? "one_time";
 
   return (
     <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
       {/* Title */}
       <p className="text-sm font-bold text-ws-charcoal">Decision Mode</p>
-      <p className="text-xs text-ws-grey mt-1">
-        How much are you thinking of spending?
-      </p>
+      <p className="text-xs text-ws-grey mt-1">Ask Odysseus before you spend</p>
 
       {/* Input row */}
       <div className="flex items-center gap-3 mt-4">
-        <div className="flex-1 flex items-center gap-1 border-b border-ws-border pb-1">
-          <span className="text-lg font-bold text-ws-charcoal">$</span>
+        <div className="flex-1 border-b border-ws-border pb-1">
           <input
             type="text"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => handleAmountChange(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="0"
-            className="flex-1 text-lg font-bold text-ws-charcoal tabular-nums bg-transparent outline-none placeholder:text-ws-light-grey"
+            placeholder="e.g. $80 dinner tonight"
+            disabled={phase === "parsing"}
+            className="w-full text-sm text-ws-charcoal bg-transparent outline-none placeholder:text-ws-light-grey disabled:opacity-50"
           />
         </div>
-        <button
-          onClick={handleCheck}
-          disabled={isDisabled}
-          className="px-4 py-2 rounded-[72px] bg-ws-charcoal text-white text-sm font-bold transition-opacity disabled:opacity-30"
-        >
-          Check
-        </button>
+        {phase === "idle" || phase === "parsing" ? (
+          <button
+            onClick={handleSubmit}
+            disabled={!input.trim() || phase === "parsing"}
+            className="px-4 py-2 rounded-[72px] bg-ws-charcoal text-white text-sm font-bold transition-opacity disabled:opacity-30"
+          >
+            {phase === "parsing" ? "..." : "Check"}
+          </button>
+        ) : (
+          <button
+            onClick={handleReset}
+            className="px-4 py-2 rounded-[72px] bg-ws-off-white text-ws-charcoal text-sm font-bold"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
-      {/* Expanded result */}
+      {/* Clarification phase */}
       <AnimatePresence>
-        {expanded && simulation && (
+        {phase === "clarifying" && intent && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-4">
+              <p className="text-sm text-ws-charcoal">
+                {intent.clarificationQuestion ?? "How much are you considering spending?"}
+              </p>
+
+              {/* Amount clarification */}
+              {intent.amount === null && (
+                <div className="flex items-center gap-1 border-b border-ws-border pb-1 mt-3">
+                  <span className="text-lg font-bold text-ws-charcoal">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={clarifyAmount}
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/[^0-9.]/g, "");
+                      const parts = cleaned.split(".");
+                      setClarifyAmount(
+                        parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned
+                      );
+                    }}
+                    placeholder="0"
+                    className="flex-1 text-lg font-bold text-ws-charcoal tabular-nums bg-transparent outline-none placeholder:text-ws-light-grey"
+                  />
+                </div>
+              )}
+
+              {/* Cadence clarification */}
+              {intent.cadence === null && (
+                <div className="flex gap-2 mt-3">
+                  {(["one_time", "monthly"] as const).map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setClarifyCadence(c)}
+                      className={`px-3 py-1.5 rounded-[72px] text-xs font-bold transition-colors ${
+                        clarifyCadence === c
+                          ? "bg-ws-charcoal text-white"
+                          : "bg-ws-off-white text-ws-grey"
+                      }`}
+                    >
+                      {CADENCE_LABELS[c]}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={handleClarifySubmit}
+                disabled={
+                  (intent.amount === null && (!clarifyAmount || parseFloat(clarifyAmount) <= 0)) ||
+                  (intent.cadence === null && clarifyCadence === null)
+                }
+                className="mt-4 px-4 py-2 rounded-[72px] bg-ws-charcoal text-white text-sm font-bold transition-opacity disabled:opacity-30"
+              >
+                Check
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Result phase */}
+      <AnimatePresence>
+        {phase === "result" && simulation && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -127,6 +278,15 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
             className="overflow-hidden"
           >
             <div className="pt-5">
+              {/* Cadence chip */}
+              {resolvedCadence !== "one_time" && (
+                <div className="flex justify-center mb-2">
+                  <span className="text-[10px] text-ws-grey bg-ws-off-white rounded-[72px] px-2 py-0.5">
+                    {projection?.assumption}
+                  </span>
+                </div>
+              )}
+
               {/* Verdict */}
               <VerdictIndicator
                 verdict={simulation.verdict}
@@ -136,6 +296,11 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
 
               {/* Impact indicators */}
               <ImpactGrid simulation={simulation} snapshot={snapshot} />
+
+              {/* Divergence fork visualization */}
+              {projection && projection.deltaAt90Days > 0 && (
+                <DivergenceFork projection={projection} />
+              )}
 
               {/* AI explanation */}
               <div className="mt-4">
@@ -308,5 +473,141 @@ function ExplanationSkeleton() {
       <div className="w-full h-3 bg-ws-light-grey rounded" />
       <div className="w-4/5 h-3 bg-ws-light-grey rounded mt-2" />
     </div>
+  );
+}
+
+// ── Divergence Fork SVG ──────────────────────────────────────
+
+const SVG_W = 300;
+const SVG_H = 140;
+const PAD_L = 32;
+const PAD_R = 16;
+const PAD_T = 16;
+const PAD_B = 28;
+
+function DivergenceFork({ projection }: { projection: DivergenceProjection }) {
+  const { baseline, withSpend, weeks, deltaAt90Days } = projection;
+
+  // Scale values to SVG coordinates
+  const allValues = [...baseline, ...withSpend];
+  const maxVal = Math.max(...allValues, 1);
+  const minVal = Math.min(...allValues, 0);
+  const range = maxVal - minVal || 1;
+
+  const plotW = SVG_W - PAD_L - PAD_R;
+  const plotH = SVG_H - PAD_T - PAD_B;
+
+  function toX(i: number): number {
+    return PAD_L + (i / (weeks - 1)) * plotW;
+  }
+  function toY(v: number): number {
+    return PAD_T + plotH - ((v - minVal) / range) * plotH;
+  }
+
+  function buildPath(values: number[]): string {
+    return values
+      .map((v, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(v).toFixed(1)}`)
+      .join(" ");
+  }
+
+  const baselinePath = buildPath(baseline);
+  const spendPath = buildPath(withSpend);
+
+  const endX = toX(weeks - 1);
+  const baseEndY = toY(baseline[weeks - 1]);
+  const spendEndY = toY(withSpend[weeks - 1]);
+  const gapMidY = (baseEndY + spendEndY) / 2;
+
+  // Total path length estimate for animation
+  const pathLen = plotW * 1.2;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4, delay: 0.3 }}
+      className="mt-4"
+    >
+      <p className="text-[10px] text-ws-grey uppercase tracking-wide mb-1">
+        90-day portfolio divergence
+      </p>
+      <svg
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        className="w-full"
+        role="img"
+        aria-label={`Portfolio divergence: $${Math.round(deltaAt90Days)} difference over 90 days`}
+      >
+        {/* Baseline path — draws first */}
+        <motion.path
+          d={baselinePath}
+          fill="none"
+          stroke="#0b8a3e"
+          strokeWidth={2}
+          strokeLinecap="round"
+          initial={{ strokeDasharray: pathLen, strokeDashoffset: pathLen }}
+          animate={{ strokeDashoffset: 0 }}
+          transition={{ duration: 1, ease: "easeOut" }}
+        />
+
+        {/* With-spend path — draws second */}
+        <motion.path
+          d={spendPath}
+          fill="none"
+          stroke="#c49b3c"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeDasharray="4 3"
+          initial={{ strokeDasharray: `4 3`, strokeDashoffset: pathLen }}
+          animate={{ strokeDashoffset: 0 }}
+          transition={{ duration: 1, delay: 0.6, ease: "easeOut" }}
+        />
+
+        {/* Gap bracket line */}
+        <motion.line
+          x1={endX + 6}
+          y1={baseEndY}
+          x2={endX + 6}
+          y2={spendEndY}
+          stroke="rgba(50,48,47,0.2)"
+          strokeWidth={1}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.6, duration: 0.3 }}
+        />
+
+        {/* Delta text — lands last */}
+        <motion.text
+          x={endX + 12}
+          y={gapMidY + 4}
+          fill="rgb(50,48,47)"
+          fontSize={10}
+          fontWeight={700}
+          fontFamily="Inter, sans-serif"
+          initial={{ opacity: 0, x: endX + 20 }}
+          animate={{ opacity: 1, x: endX + 12 }}
+          transition={{ delay: 1.8, duration: 0.4 }}
+        >
+          -${Math.round(deltaAt90Days)}
+        </motion.text>
+
+        {/* Week labels */}
+        <text x={PAD_L} y={SVG_H - 4} fill="rgb(104,102,100)" fontSize={8}>
+          Week 1
+        </text>
+        <text x={endX - 20} y={SVG_H - 4} fill="rgb(104,102,100)" fontSize={8}>
+          Week {weeks}
+        </text>
+
+        {/* Legend dots */}
+        <circle cx={PAD_L} cy={SVG_H - 16} r={3} fill="#0b8a3e" />
+        <text x={PAD_L + 6} y={SVG_H - 13} fill="rgb(104,102,100)" fontSize={7}>
+          Baseline
+        </text>
+        <circle cx={PAD_L + 52} cy={SVG_H - 16} r={3} fill="#c49b3c" />
+        <text x={PAD_L + 58} y={SVG_H - 13} fill="rgb(104,102,100)" fontSize={7}>
+          With spend
+        </text>
+      </svg>
+    </motion.div>
   );
 }
