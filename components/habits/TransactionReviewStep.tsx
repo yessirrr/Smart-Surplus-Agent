@@ -69,6 +69,7 @@ export function TransactionReviewStep({
     (sum, t) => sum + Math.abs(t.amount),
     0
   );
+  const isSubscriptionHabit = habit.category === "subscriptions";
 
   function toggleTransaction(id: string) {
     const next = new Set(confirmedIds);
@@ -211,7 +212,23 @@ export function TransactionReviewStep({
           </div>
         )}
         {!insightLoading && insightError && (
-          <p className="text-xs text-ws-grey mt-2">Insight unavailable</p>
+          <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm">&#10024;</span>
+              <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
+                Odysseus Insight
+              </p>
+            </div>
+            {isSubscriptionHabit ? (
+              <p className="text-xs text-ws-grey leading-relaxed">
+                You&apos;ve confirmed {formatCurrency(confirmedSpend)} in recurring subscription charges. Treat this as a cancel-and-reinvest opportunity by redirecting the same monthly amount into your investment plan.
+              </p>
+            ) : (
+              <p className="text-xs text-ws-grey leading-relaxed">
+                Live insight is temporarily unavailable. The confirmed pattern still shows a consistent spending habit worth reducing gradually and redirecting into long-term goals.
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -247,4 +264,5 @@ function InsightSkeleton() {
     </div>
   );
 }
+
 

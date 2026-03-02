@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -93,7 +93,7 @@ export default function HabitsPage() {
   const [canceledMerchants, setCanceledMerchants] = useState<Set<string>>(new Set());
   const [selectedFund, setSelectedFund] = useState<string>("S&P 500 Index");
 
-  // Lift habit insight hook to parent — persists across step navigation
+  // Lift habit insight hook to parent â€” persists across step navigation
   const {
     data: insight,
     loading: insightLoading,
@@ -102,12 +102,34 @@ export default function HabitsPage() {
   } = useAgent<HabitInsightResult>("/api/agent/habit-insight");
 
   useEffect(() => {
-    if (selectedHabitId) {
-      fetchInsight({ habitId: selectedHabitId });
-    }
-  }, [selectedHabitId, fetchInsight]);
+    if (!selectedHabitId) return;
 
-  // Goal insight hook — fetches when intensity or selected habit changes
+    const selected = allHabitCandidates.find((h) => h.id === selectedHabitId);
+    if (!selected) return;
+
+    if (selected.category === "subscriptions") {
+      const selectedTxnIds = new Set(selected.transactionIds);
+      const confirmedSpend = txns
+        .filter((t) => selectedTxnIds.has(t.id) && confirmedIds.has(t.id))
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+      const confirmedCount = selected.transactionIds.filter((id) =>
+        confirmedIds.has(id)
+      ).length;
+
+      fetchInsight({
+        habitId: selectedHabitId,
+        confirmedSpend,
+        confirmedCount,
+        goalMode: "cancel_reinvest",
+      });
+      return;
+    }
+
+    fetchInsight({ habitId: selectedHabitId });
+  }, [selectedHabitId, allHabitCandidates, txns, confirmedIds, fetchInsight]);
+
+  // Goal insight hook â€” fetches when intensity or selected habit changes
   const {
     data: goalInsight,
     loading: goalInsightLoading,
@@ -329,3 +351,4 @@ export default function HabitsPage() {
     </div>
   );
 }
+

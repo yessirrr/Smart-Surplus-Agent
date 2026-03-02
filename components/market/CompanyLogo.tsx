@@ -21,14 +21,56 @@ type LogoOpticalOverride = {
   translateX?: number;
   translateY?: number;
   fit?: "contain" | "cover";
+  inset?: "default" | "none" | "spacious";
+  surface?: "default" | "app" | "app-no-ring";
+  box?: number;
+  clipRounded?: boolean;
 };
 
 const LOGO_OPTICAL_OVERRIDES: Record<string, LogoOpticalOverride> = {
-  // Streaming logos.
-  "netflix-icon": { scale: 1.12 },
-  netflix: { scale: 1.12 },
-  "spotify-tile": { scale: 1.12 },
-  spotify: { scale: 1.12 },
+  // Subscription merchants: targeted size tuning.
+  "netflix-icon": {
+    scale: 1.41,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app",
+    box: 40,
+    clipRounded: true,
+  },
+  netflix: {
+    scale: 1.41,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app",
+    box: 40,
+    clipRounded: true,
+  },
+  "spotify-tile": {
+    scale: 1.31,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app-no-ring",
+    box: 40,
+  },
+  spotify: {
+    scale: 1.31,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app-no-ring",
+    box: 40,
+  },
+  "apple-logo-2": {
+    scale: 1.06,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app",
+  },
+  apple: {
+    scale: 1.06,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app",
+  },
 
   // Uber family.
   "uber-logo-6": { scale: 1.38, fit: "cover" },
@@ -38,10 +80,20 @@ const LOGO_OPTICAL_OVERRIDES: Record<string, LogoOpticalOverride> = {
   ubereats: { scale: 1.16 },
 
   // Remaining brand logos.
-  "amazon-logo-14": { scale: 1.16 },
-  amazon: { scale: 1.16 },
-  "apple-logo-2": { scale: 1.2 },
-  apple: { scale: 1.2 },
+  "amazon-logo-14": {
+    scale: 1.11,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app-no-ring",
+    box: 40,
+  },
+  amazon: {
+    scale: 1.11,
+    fit: "contain",
+    inset: "spacious",
+    surface: "app-no-ring",
+    box: 40,
+  },
   "best-buy-logo-2": { scale: 1.16 },
   "chipotle-logo-2": { scale: 1.14 },
   chipotle: { scale: 1.14 },
@@ -121,7 +173,12 @@ export function CompanyLogo({
       LOGO_OPTICAL_OVERRIDES[logoFileKey] ??
       LOGO_OPTICAL_OVERRIDES[normalizedCompanyKey] ??
       LOGO_OPTICAL_OVERRIDES[normalizedMerchantKey] ??
-      { scale: 1, fit: "contain" }
+      {
+        scale: 1,
+        fit: "contain",
+        inset: "default",
+        surface: "default",
+      }
     );
   }, [logoFileKey, normalizedCompanyKey, normalizedMerchantKey]);
 
@@ -142,17 +199,31 @@ export function CompanyLogo({
     }
   }
 
-  const box = size === "sm" ? 32 : 36;
+  const box = optical.box ?? (size === "sm" ? 32 : 36);
   const fitMode = optical.fit ?? "contain";
+  const insetMode = optical.inset ?? "default";
+  const surfaceMode = optical.surface ?? "default";
+
+  const insetClass =
+    insetMode === "none" ? "p-0" : insetMode === "spacious" ? "p-1.5" : "p-1";
+  const surfaceClass =
+    surfaceMode === "app"
+      ? "bg-white ring-1 ring-black/5 rounded-xl"
+      : surfaceMode === "app-no-ring"
+        ? "bg-white rounded-xl"
+        : "bg-ws-light-grey rounded-[10px]";
+  const imageClipClass = optical.clipRounded
+    ? "overflow-hidden rounded-[10px]"
+    : "";
 
   return (
     <div
-      className="shrink-0 rounded-[10px] bg-ws-light-grey p-1 flex items-center justify-center"
+      className={`shrink-0 overflow-hidden flex items-center justify-center ${insetClass} ${surfaceClass}`}
       style={{ width: box, height: box }}
     >
       {logoSrc && !imgError ? (
         <div
-          className="w-full h-full flex items-center justify-center"
+          className={`relative w-full h-full ${imageClipClass}`}
           style={{
             transform: `translate(${optical.translateX ?? 0}px, ${
               optical.translateY ?? 0
@@ -163,18 +234,19 @@ export function CompanyLogo({
           <Image
             src={logoSrc}
             alt={companyName ?? merchantName ?? "Company logo"}
-            width={box - 12}
-            height={box - 12}
-            className={`w-full h-full ${
-              fitMode === "cover" ? "object-cover" : "object-contain"
-            }`}
+            fill
+            sizes={`${box}px`}
+            className={fitMode === "cover" ? "object-cover" : "object-contain"}
             onError={() => setImgError(true)}
           />
         </div>
       ) : (
         <div
           className="w-full h-full rounded-[8px] flex items-center justify-center text-white font-bold"
-          style={{ backgroundColor: fallbackColor, fontSize: size === "sm" ? 12 : 13 }}
+          style={{
+            backgroundColor: fallbackColor,
+            fontSize: size === "sm" ? 12 : 13,
+          }}
         >
           {fallbackText.slice(0, 1).toUpperCase()}
         </div>
@@ -182,3 +254,10 @@ export function CompanyLogo({
     </div>
   );
 }
+
+
+
+
+
+
+
