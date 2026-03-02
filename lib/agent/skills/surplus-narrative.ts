@@ -8,13 +8,21 @@ export interface SurplusNarrativeResult {
   projectionNote: string;
 }
 
-const SYSTEM_PROMPT = `You are Odysseus, a personal finance AI assistant. You summarize a user's surplus situation clearly and motivationally. You see the full picture — income, essential costs, discretionary spending, and habit-linked leaks.
+export interface SurplusNarrativeInput {
+  selectedHabits?: Array<{ name: string; category: string; monthlySpend: number }>;
+  totalMonthlySavings?: number;
+  actualSurplus?: number;
+  potentialSurplus?: number;
+}
+
+const BASE_SYSTEM_PROMPT = `You are Odysseus, a personal finance AI assistant. You summarize a user's surplus situation clearly and motivationally. You see the full picture — income, essential costs, discretionary spending, and habit-linked leaks.
 
 Rules:
 - Never invent numbers. Only reference the data provided.
 - Never give specific investment advice.
 - Be concise: each field should be 1-3 sentences maximum.
 - Frame the gap between actual and potential surplus as an opportunity, not a criticism.
+- When the user has selected specific habits to address, tailor your response to those specific habits. Reference them by name. Be specific about the combined savings and what they could become if invested. If only one habit is selected, focus entirely on that one. If multiple are selected, describe the combined impact.
 - Output ONLY valid JSON matching the schema.`;
 
 const JSON_SCHEMA = {
@@ -49,10 +57,26 @@ const FALLBACK: SurplusNarrativeResult = {
     "Consistently investing your potential surplus at historical market returns could build a significant portfolio over the next 5-10 years.",
 };
 
+function getContextFallback(context: SurplusNarrativeInput): SurplusNarrativeResult {
+  const habitNames = context.selectedHabits?.map(h => h.name).join(" and ") ?? "your habits";
+  const savings = context.totalMonthlySavings ?? 0;
+  const fv5 = savings > 0 ? savings * ((Math.pow(1 + 0.07 / 12, 60) - 1) / (0.07 / 12)) : 0;
+  return {
+    situationSummary: `You've chosen to focus on ${habitNames}. Together, these represent $${Math.round(savings)} per month in potential savings.`,
+    trendAnalysis: "Your spending in these categories has been consistent over the past 24 months, which means the savings potential is reliable — not a one-month anomaly.",
+    opportunityStatement: `Redirecting $${Math.round(savings)} per month into a balanced portfolio could grow to approximately $${Math.round(fv5).toLocaleString()} over 5 years at historical returns.`,
+    projectionNote: "These projections use a 7% annual return assumption. Actual results will vary. The key insight: consistent small redirections compound meaningfully.",
+  };
+}
+
 export async function generateSurplusNarrative(
-  surplus: SurplusSummary
+  surplus: SurplusSummary,
+  context?: SurplusNarrativeInput
 ): Promise<SurplusNarrativeResult> {
   if (!isApiKeyValid()) {
+    if (context?.selectedHabits && context.selectedHabits.length > 0) {
+      return getContextFallback(context);
+    }
     return FALLBACK;
   }
 
@@ -66,7 +90,7 @@ export async function generateSurplusNarrative(
         isEssential: c.isEssential,
       }));
 
-    const userMessage = JSON.stringify({
+    const baseData = {
       averageMonthlySurplus: Math.round(surplus.averageMonthlySurplus),
       averageMonthlyPotentialSurplus: Math.round(
         surplus.averageMonthlyPotentialSurplus
@@ -74,13 +98,24 @@ export async function generateSurplusNarrative(
       totalHabitSpend: Math.round(surplus.totalHabitSpend),
       surplusTrend: surplus.surplusTrend,
       topCategories,
-    });
+    };
+
+    const userPayload = context?.selectedHabits
+      ? {
+          ...baseData,
+          selectedHabits: context.selectedHabits,
+          totalMonthlySavings: context.totalMonthlySavings,
+          potentialSurplus: context.potentialSurplus,
+        }
+      : baseData;
+
+    const userMessage = JSON.stringify(userPayload);
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       max_tokens: 400,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: BASE_SYSTEM_PROMPT },
         { role: "user", content: userMessage },
       ],
       response_format: {
@@ -90,10 +125,18 @@ export async function generateSurplusNarrative(
     });
 
     const content = response.choices[0]?.message?.content;
-    if (!content) return FALLBACK;
+    if (!content) {
+      if (context?.selectedHabits && context.selectedHabits.length > 0) {
+        return getContextFallback(context);
+      }
+      return FALLBACK;
+    }
 
     return JSON.parse(content) as SurplusNarrativeResult;
   } catch {
+    if (context?.selectedHabits && context.selectedHabits.length > 0) {
+      return getContextFallback(context);
+    }
     return FALLBACK;
   }
 }

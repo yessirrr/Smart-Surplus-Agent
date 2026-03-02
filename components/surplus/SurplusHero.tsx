@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   AreaChart,
   Area,
@@ -25,12 +25,16 @@ interface SurplusHeroProps {
   actualSurplus: number;
   adjustedPotentialSurplus: number;
   chartData: ChartDataPoint[];
+  selectedHabits?: Array<{ name: string; category: string; monthlySpend: number }>;
+  totalMonthlySavings?: number;
 }
 
 export function SurplusHero({
   actualSurplus,
   adjustedPotentialSurplus,
   chartData,
+  selectedHabits,
+  totalMonthlySavings,
 }: SurplusHeroProps) {
   const delta = adjustedPotentialSurplus - actualSurplus;
 
@@ -48,10 +52,27 @@ export function SurplusHero({
     generate: fetchNarrative,
   } = useAgent<SurplusNarrativeResult>("/api/agent/surplus-narrative");
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   useEffect(() => {
-    fetchNarrative();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (selectedHabits && selectedHabits.length > 0) {
+        fetchNarrative({
+          selectedHabits,
+          totalMonthlySavings,
+          actualSurplus,
+          potentialSurplus: adjustedPotentialSurplus,
+        });
+      } else {
+        fetchNarrative();
+      }
+    }, 600);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedHabits, totalMonthlySavings]);
 
   return (
     <div>

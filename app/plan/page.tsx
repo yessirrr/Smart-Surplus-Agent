@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "motion/react";
 import transactions from "@/data/transactions.json";
 import type { Transaction } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { useAgent } from "@/lib/agent/use-agent";
+import type { CommitmentSummaryResult } from "@/lib/agent/skills/commitment-summary";
 
 // ---------------------------------------------------------------------------
 // Constants & baseline computation from real data
@@ -675,6 +677,32 @@ export default function PlanPage() {
   const totalBeats = BEATS.length;
   const atEnd = currentBeat >= totalBeats - 1;
 
+  // AI summary
+  const {
+    data: summary,
+    loading: summaryLoading,
+    generate: fetchSummary,
+  } = useAgent<CommitmentSummaryResult>("/api/agent/commitment-summary");
+  const summaryFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (atEnd && !summaryFetchedRef.current) {
+      summaryFetchedRef.current = true;
+      const finalLedger = LEDGERS[totalBeats - 1];
+      const cleanBeats = BEATS.filter((b) => b.id > 0 && b.isClean).length;
+      const slipBeats = BEATS.filter((b) => b.isSlip).length;
+      fetchSummary({
+        totalBeats: totalBeats - 1, // exclude baseline
+        cleanBeats,
+        slipBeats,
+        weeklyAmount: weeklyVapeSpend,
+        totalInvested: finalLedger.investedTotal,
+        totalHeld: finalLedger.heldTotal,
+        portfolioValue: finalLedger.portfolioValue,
+      });
+    }
+  }, [atEnd, totalBeats, fetchSummary]);
+
   // Autoplay logic
   useEffect(() => {
     if (autoplay && !atEnd) {
@@ -834,6 +862,46 @@ export default function PlanPage() {
             >
               This is what Odysseus does. Behavior in, investment out.
             </motion.p>
+          )}
+
+          {/* AI Summary */}
+          {atEnd && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.8 }}
+              className="w-full max-w-[420px] bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm">&#10024;</span>
+                <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
+                  Odysseus
+                </p>
+              </div>
+              {summaryLoading && (
+                <div className="animate-pulse">
+                  <div className="w-full h-3 bg-ws-light-grey rounded" />
+                  <div className="w-5/6 h-3 bg-ws-light-grey rounded mt-2" />
+                  <div className="w-4/6 h-3 bg-ws-light-grey rounded mt-2" />
+                </div>
+              )}
+              {!summaryLoading && summary && (
+                <>
+                  <p className="text-sm text-ws-charcoal leading-relaxed">
+                    {summary.reflection}
+                  </p>
+                  <p className="text-xs text-ws-grey leading-relaxed mt-2">
+                    {summary.costOfSlips}
+                  </p>
+                  <p className="text-xs text-ws-green italic leading-relaxed mt-2">
+                    {summary.projection}
+                  </p>
+                </>
+              )}
+              {!summaryLoading && !summary && (
+                <p className="text-xs text-ws-grey">Summary unavailable</p>
+              )}
+            </motion.div>
           )}
         </div>
       </div>

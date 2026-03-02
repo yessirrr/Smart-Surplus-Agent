@@ -107,7 +107,13 @@ export default function SurplusPage() {
       surplusSummary.averageMonthlySurplus + totalSelectedMonthly;
     const monthlySavings = totalSelectedMonthly;
 
-    return { chartData, adjustedPotential, monthlySavings };
+    const selectedHabitsData = selectedHabits.map((h) => ({
+      name: h.name,
+      category: h.category,
+      monthlySpend: h.metrics.monthlySpend,
+    }));
+
+    return { chartData, adjustedPotential, monthlySavings, selectedHabitsData };
   }, [selectedHabitIds, surplusSummary, habitCandidates, habitMonthlySpend]);
 
   return (
@@ -133,6 +139,8 @@ export default function SurplusPage() {
             actualSurplus={surplusSummary.averageMonthlySurplus}
             adjustedPotentialSurplus={adjusted.adjustedPotential}
             chartData={adjusted.chartData}
+            selectedHabits={adjusted.selectedHabitsData}
+            totalMonthlySavings={adjusted.monthlySavings}
           />
         </div>
 
