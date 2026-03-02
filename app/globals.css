@@ -61,6 +61,16 @@
   display: none;
 }
 
+/* ---- Pulse Animations ---- */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-green {
+  animation: pulse-green 2s ease-in-out infinite;
+}
+
 /* ---- Base Styles ---- */
 html {
   scrollbar-gutter: stable;

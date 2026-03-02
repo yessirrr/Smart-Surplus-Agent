@@ -127,12 +127,20 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
           <p className="text-sm text-ws-grey mt-2">
             Odysseus will notify you when surplus is available to invest.
           </p>
-          <Link
-            href="/"
-            className="mt-6 inline-block text-sm font-bold text-white bg-ws-charcoal rounded-[72px] px-8 py-3 hover:opacity-90 transition-opacity"
-          >
-            Back to Dashboard
-          </Link>
+          <div className="flex flex-col items-center gap-3 mt-6">
+            <Link
+              href="/plan"
+              className="inline-block text-sm font-bold text-white bg-ws-charcoal rounded-[72px] px-8 py-3 hover:opacity-90 transition-opacity"
+            >
+              See Odysseus in Action
+            </Link>
+            <Link
+              href="/"
+              className="text-sm font-bold text-ws-grey hover:text-ws-charcoal transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );

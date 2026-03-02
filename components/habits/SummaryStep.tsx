@@ -127,6 +127,12 @@ export function SummaryStep({
           Back to Dashboard
         </Link>
         <Link
+          href="/plan"
+          className="flex-1 text-center text-sm font-bold text-white bg-ws-green rounded-[72px] py-3 hover:opacity-90 transition-opacity"
+        >
+          See It In Action
+        </Link>
+        <Link
           href="/surplus"
           className="flex-1 text-center text-sm font-bold text-white bg-ws-charcoal rounded-[72px] py-3 hover:opacity-90 transition-opacity"
         >
@@ -217,6 +223,12 @@ function SubscriptionSummary({
           className="flex-1 text-center text-sm font-bold text-ws-charcoal bg-ws-light-grey rounded-[72px] py-3 hover:opacity-80 transition-opacity"
         >
           Back to Dashboard
+        </Link>
+        <Link
+          href="/plan"
+          className="flex-1 text-center text-sm font-bold text-white bg-ws-green rounded-[72px] py-3 hover:opacity-90 transition-opacity"
+        >
+          See It In Action
         </Link>
         <Link
           href="/surplus"
