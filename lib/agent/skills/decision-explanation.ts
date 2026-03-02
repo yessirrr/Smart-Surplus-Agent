@@ -10,6 +10,8 @@ export interface DecisionExplanationResult {
   assumptions: string[];
 }
 
+export type ExplanationSource = "openai" | "fallback";
+
 export interface DecisionExplanationInputLegacy {
   proposedAmount: number;
   verdict: "safe" | "tight" | "risky";
@@ -68,26 +70,29 @@ export interface DecisionExplanationInputV2 {
   assumptions?: string[];
 }
 
-export type DecisionExplanationInput = DecisionExplanationInputLegacy | DecisionExplanationInputV2;
+export type DecisionExplanationInput =
+  | DecisionExplanationInputLegacy
+  | DecisionExplanationInputV2;
 
 const SYSTEM_PROMPT = `You are Odysseus, a personal finance assistant.
 
-You are given deterministic simulation output and factual numbers.
-Your job is to explain what it means.
+You receive deterministic simulation results and factual numbers.
+Your role is to explain the result, not compute it.
 
 Hard rules:
-- Do NOT perform math.
-- Do NOT invent numbers.
-- Use only provided fields.
-- Keep it concise and concrete.
-- Output JSON only.
+- Do NOT do any math.
+- Do NOT invent any number.
+- Use only supplied values and labels.
+- Keep the tone concise, direct, and practical.
+- Keep recommendation singular and clear.
+- Output strict JSON only.
 
-Output fields:
-- headline: short, punchy, one line
-- explanation: 2-3 short sentences
-- suggestion: 1 sentence, practical next action
+Output:
+- headline: one short sentence
+- explanation: 2-3 short sentences using scenario and rule
+- suggestion: one actionable sentence aligned with recommended action
 - confidence: low | medium | high
-- assumptions: 0-2 short strings (only if assumptions exist)`;
+- assumptions: 0-2 short strings when assumptions were used`;
 
 const JSON_SCHEMA = {
   name: "decision_explanation_v2",
@@ -118,18 +123,11 @@ function isV2Input(input: DecisionExplanationInput): input is DecisionExplanatio
 
 function money(n: number): string {
   const abs = Math.abs(n);
+  const hasCents = Math.abs(abs % 1) > 0;
   return `$${abs.toLocaleString("en-CA", {
-    minimumFractionDigits: abs % 1 === 0 ? 0 : 2,
+    minimumFractionDigits: hasCents ? 2 : 0,
     maximumFractionDigits: 2,
   })}`;
-}
-
-function horizonLabel(horizon: TimeHorizon): string {
-  if (horizon.kind === "today") return "today";
-  if (horizon.kind === "this_week") return "this week";
-  if (horizon.kind === "this_month") return "this month";
-  if (horizon.kind === "date") return `${horizon.value}`;
-  return `in ${horizon.value} days`;
 }
 
 function resolveConfidenceV2(input: DecisionExplanationInputV2): "low" | "medium" | "high" {
@@ -149,7 +147,13 @@ function resolveConfidenceV2(input: DecisionExplanationInputV2): "low" | "medium
 }
 
 function fallbackLegacy(input: DecisionExplanationInputLegacy): DecisionExplanationResult {
-  const cadence = input.cadence === "weekly" ? "/week" : input.cadence === "monthly" ? "/month" : "";
+  const cadence =
+    input.cadence === "weekly"
+      ? "/week"
+      : input.cadence === "monthly"
+        ? "/month"
+        : "";
+
   const divergence =
     input.deltaAt90Days > 20
       ? ` Over 90 days, the modeled gap is ${money(input.deltaAt90Days)}.`
@@ -158,8 +162,8 @@ function fallbackLegacy(input: DecisionExplanationInputLegacy): DecisionExplanat
   if (input.verdict === "safe") {
     return {
       headline: "This fits your current cashflow.",
-      explanation: `${money(input.proposedAmount)}${cadence} stays within your near-term cash and keeps your buffer in healthy range.${divergence}`,
-      suggestion: "No change needed if this matches your priority.",
+      explanation: `${money(input.proposedAmount)}${cadence} stays inside your current near-term limits.${divergence}`,
+      suggestion: "Proceed if this is still your priority.",
       confidence: "high",
       assumptions: [],
     };
@@ -167,18 +171,18 @@ function fallbackLegacy(input: DecisionExplanationInputLegacy): DecisionExplanat
 
   if (input.verdict === "tight") {
     return {
-      headline: "Doable, but tight.",
-      explanation: `${money(input.proposedAmount)}${cadence} leaves about ${money(input.freeCashAfter)} until payday in ${input.daysUntilPay} days. Your buffer is around ${input.bufferMonths.toFixed(1)} months after this.${divergence}`,
-      suggestion: "Consider splitting this across two pay cycles.",
+      headline: "Doable, but margin gets thin.",
+      explanation: `${money(input.proposedAmount)}${cadence} leaves about ${money(input.freeCashAfter)} until payday in ${input.daysUntilPay} days.${divergence}`,
+      suggestion: "Reduce the amount or split it across pay cycles.",
       confidence: "medium",
       assumptions: [],
     };
   }
 
   return {
-    headline: "This would strain the plan.",
-    explanation: `${money(input.proposedAmount)}${cadence} pushes free cash below zero before payday and reduces your safety buffer to ${input.bufferMonths.toFixed(1)} months.${divergence}`,
-    suggestion: "Delay or lower the amount to protect your baseline.",
+    headline: "This breaks your near-term cushion.",
+    explanation: `${money(input.proposedAmount)}${cadence} pushes free cash negative before payday and drops safety room.${divergence}`,
+    suggestion: "Delay or reduce the spend.",
     confidence: "high",
     assumptions: [],
   };
@@ -189,84 +193,61 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
   const confidence = resolveConfidenceV2(input);
   const assumptions = input.assumptions?.slice(0, 2) ?? [];
 
-  if (intent.intentType === "recurring") {
-    const drag = facts.recurringImpactMonthly ?? simulation.recurringImpactMonthly ?? 0;
-    const explanation =
-      simulation.verdict === "risky"
-        ? `This adds about ${money(drag)} per month and drives the model into a negative surplus path.`
-        : `This adds about ${money(drag)} per month. Free cash after burn is modeled at ${money(simulation.freeCashAfter)} until the next payday.`;
+  const action = simulation.recommendedAction;
+
+  if (intent.intentType === "planned_purchase") {
+    const projected = facts.projectedFreeCashAtPurchase ?? simulation.freeCashBefore;
+    const dateLabel = simulation.projectedDate ?? facts.projectedDate ?? "your target date";
+    const safeDateLine = simulation.bestSafeDate
+      ? `Earliest modeled safe date is ${simulation.bestSafeDate}.`
+      : "No safe date appears in the current search window.";
 
     return {
-      headline: simulation.verdict === "safe" ? "Recurring cost is manageable." : simulation.verdict === "tight" ? "Recurring cost compresses your margin." : "Recurring cost is too heavy right now.",
-      explanation,
-      suggestion:
-        simulation.verdict === "risky"
-          ? "Lower the monthly amount or offset it with a matching cut."
-          : "Track this as a standing monthly drag before committing.",
+      headline: simulation.ruleText,
+      explanation: `At ${dateLabel}, projected cash before purchase is ${money(projected)} and after purchase is ${money(simulation.freeCashAfter)}. Buffer after purchase is ${simulation.bufferMonthsAfter.toFixed(1)} months. ${simulation.verdict === "safe" ? "The buffer rule holds at this date." : safeDateLine}`,
+      suggestion: `${action.title}. ${action.detail}`,
       confidence,
       assumptions,
     };
   }
 
   if (intent.intentType === "big_goal") {
-    const gap = facts.gapToSafeBudget ?? 0;
+    const gap = facts.gapToSafeBudget ?? simulation.gapToSafeBudget ?? 0;
     const months = facts.monthsToGoal ?? simulation.monthsToGoal;
-    const required = facts.requiredMonthlySavings ?? simulation.monthlySavingsNeeded;
+    const required =
+      facts.requiredMonthlySavings ?? simulation.monthlySavingsNeeded;
 
-    if (simulation.verdict === "risky") {
-      const planLine =
-        months && required
-          ? `To close the gap, the model suggests about ${money(required)}/month for ${months} months.`
-          : "Current cashflow has no modeled savings capacity for this goal yet.";
-
-      return {
-        headline: "This needs a savings runway first.",
-        explanation: `Your safe one-time budget is ${money(simulation.maxSafeOneTimeSpend ?? 0)}, leaving a gap of ${money(gap)}. ${planLine}`,
-        suggestion: "Set a monthly target and revisit once the gap is covered.",
-        confidence,
-        assumptions,
-      };
-    }
+    const planLine =
+      months && required
+        ? `Modeled path: ${money(required)}/month for ${months} months.`
+        : "Current model does not show a monthly savings path yet.";
 
     return {
-      headline: "This can be done inside your buffer rule.",
-      explanation: `Modeled safe cap is ${money(simulation.maxSafeOneTimeSpend ?? 0)} with buffer after purchase near ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials.`,
-      suggestion: "Proceed only if this goal outranks other near-term priorities.",
+      headline: simulation.ruleText,
+      explanation: `Safe budget now is ${money(simulation.maxSafeOneTimeSpend ?? 0)} and the modeled gap is ${money(gap)}. ${simulation.verdict === "safe" ? "This goal is currently inside your guardrail." : planLine}`,
+      suggestion: `${action.title}. ${action.detail}`,
       confidence,
       assumptions,
     };
   }
 
-  if (intent.intentType === "planned_purchase") {
+  if (intent.intentType === "recurring") {
+    const drag = facts.recurringImpactMonthly ?? simulation.recurringImpactMonthly ?? 0;
+    const cap = simulation.maxSafeRecurringMonthly ?? 0;
+
     return {
-      headline:
-        simulation.verdict === "safe"
-          ? "Planned date keeps this controlled."
-          : simulation.verdict === "tight"
-            ? "Purchase timing is workable but thin."
-            : "At this timing, cash runs too tight.",
-      explanation: `For ${horizonLabel(intent.horizon)}, projected free cash is ${money(facts.projectedFreeCashAtPurchase ?? simulation.freeCashBefore)} before purchase and ${money(simulation.freeCashAfter)} after purchase. Buffer after is ${simulation.bufferMonthsAfter.toFixed(1)} months.`,
-      suggestion:
-        simulation.verdict === "risky"
-          ? "Move the date later or reduce the amount."
-          : "Keep this date and avoid extra discretionary spikes before then.",
+      headline: simulation.ruleText,
+      explanation: `This adds about ${money(drag)}/month and moves modeled potential surplus to ${money(simulation.newPotentialSurplus ?? facts.potentialSurplus)}. Your modeled recurring cap is around ${money(cap)}/month.`,
+      suggestion: `${action.title}. ${action.detail}`,
       confidence,
       assumptions,
     };
   }
 
   return {
-    headline:
-      simulation.verdict === "safe"
-        ? "This fits your current week."
-        : simulation.verdict === "tight"
-          ? "This fits, but with less breathing room."
-          : "This likely breaks your near-term cash cushion.",
-    explanation: `${intent.title} leaves modeled free cash at ${money(simulation.freeCashAfter)} for the ${facts.daysUntilNextPay} days until payday, with buffer after at ${simulation.bufferMonthsAfter.toFixed(1)} months.`,
-    suggestion:
-      simulation.verdict === "risky"
-        ? "Lower the spend or wait until the next pay cycle."
-        : "Proceed if you keep the rest of this period lean.",
+    headline: simulation.ruleText,
+    explanation: `${intent.title} leaves modeled free cash at ${money(simulation.freeCashAfter)} with buffer at ${simulation.bufferMonthsAfter.toFixed(1)} months. This uses your ${simulation.targetBufferMonths}-month safety rule as the guardrail.`,
+    suggestion: `${action.title}. ${action.detail}`,
     confidence,
     assumptions,
   };
@@ -280,17 +261,20 @@ function getFallback(input: DecisionExplanationInput): DecisionExplanationResult
   return fallbackLegacy(input);
 }
 
-export async function generateDecisionExplanation(
+export async function generateDecisionExplanationWithSource(
   input: DecisionExplanationInput
-): Promise<DecisionExplanationResult> {
+): Promise<{ result: DecisionExplanationResult; source: ExplanationSource }> {
   if (!isApiKeyValid()) {
-    return getFallback(input);
+    return {
+      result: getFallback(input),
+      source: "fallback",
+    };
   }
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_tokens: 240,
+      max_tokens: 260,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: JSON.stringify(input) },
@@ -303,11 +287,27 @@ export async function generateDecisionExplanation(
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      return getFallback(input);
+      return {
+        result: getFallback(input),
+        source: "fallback",
+      };
     }
 
-    return JSON.parse(content) as DecisionExplanationResult;
+    return {
+      result: JSON.parse(content) as DecisionExplanationResult,
+      source: "openai",
+    };
   } catch {
-    return getFallback(input);
+    return {
+      result: getFallback(input),
+      source: "fallback",
+    };
   }
+}
+
+export async function generateDecisionExplanation(
+  input: DecisionExplanationInput
+): Promise<DecisionExplanationResult> {
+  const { result } = await generateDecisionExplanationWithSource(input);
+  return result;
 }

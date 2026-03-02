@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useAgent } from "@/lib/agent/use-agent";
 import type { CashflowSnapshot } from "@/lib/domain/cashflow-model";
 import {
+  TARGET_BUFFER_MONTHS,
   clampMoney,
   diffDaysISO,
   projectDivergence,
@@ -36,40 +37,41 @@ const PLACEHOLDERS = [
 ];
 
 const REASON_LABELS: Record<string, string> = {
-  FREE_CASH_NEGATIVE: "Free cash goes below zero before payday",
-  BUFFER_LT_1: "Buffer drops below 1 month of essentials",
-  BUFFER_LT_2: "Buffer drops below 2 months of essentials",
-  FUTURE_DATE_EVAL: "Scenario evaluated at a future date",
-  PROJECTED_CHEQUING_LOW: "Projected chequing balance is low at purchase time",
-  GOAL_REQUIRES_PLANNING: "Goal needs a savings plan before purchasing",
+  FREE_CASH_NEGATIVE: "Chequing dips below $0 before payday",
+  BUFFER_LT_1: "Buffer falls below 1 month of essentials",
+  BUFFER_LT_2: `Buffer falls below ${TARGET_BUFFER_MONTHS} months of essentials`,
+  FUTURE_DATE_EVAL: "Scenario evaluated at the purchase date",
+  PROJECTED_CHEQUING_LOW: "Projected chequing is too low on purchase date",
+  GOAL_REQUIRES_PLANNING: "Goal requires a savings runway",
   GAP_TO_SAFE_BUDGET: "Amount exceeds safe one-time budget",
-  NO_SAVINGS_CAPACITY: "No monthly savings capacity detected",
-  RECURRING_RAISES_BURN: "Recurring cost raises ongoing burn rate",
+  NO_SAVINGS_CAPACITY: "No monthly savings capacity available",
+  RECURRING_RAISES_BURN: "Recurring expense increases burn rate",
   SURPLUS_NEGATIVE: "Potential surplus turns negative",
+  BUFFER_RULE_HELD: `Holds the ${TARGET_BUFFER_MONTHS}-month buffer rule`,
 };
 
 const VERDICT_STYLE = {
   safe: {
-    text: "text-ws-green",
-    chip: "bg-[rgba(11,138,62,0.12)] text-ws-green border-[rgba(11,138,62,0.32)]",
+    text: "text-[#cfeec9]",
+    chip: "bg-[rgba(11,138,62,0.22)] text-[#9ee19b] border-[rgba(158,225,155,0.36)]",
     label: "Safe",
   },
   tight: {
-    text: "text-ws-yellow",
-    chip: "bg-[rgba(196,155,60,0.16)] text-ws-yellow border-[rgba(196,155,60,0.32)]",
+    text: "text-[#f2d994]",
+    chip: "bg-[rgba(196,155,60,0.22)] text-[#f2d994] border-[rgba(242,217,148,0.34)]",
     label: "Tight",
   },
   risky: {
-    text: "text-ws-red",
-    chip: "bg-[rgba(220,67,54,0.12)] text-ws-red border-[rgba(220,67,54,0.30)]",
+    text: "text-[#f3a49d]",
+    chip: "bg-[rgba(220,67,54,0.20)] text-[#f3a49d] border-[rgba(243,164,157,0.34)]",
     label: "Risky",
   },
 } as const;
 
 const CONFIDENCE_STYLE = {
-  high: "bg-[rgba(11,138,62,0.12)] text-ws-green border-[rgba(11,138,62,0.32)]",
-  medium: "bg-[rgba(196,155,60,0.16)] text-ws-yellow border-[rgba(196,155,60,0.32)]",
-  low: "bg-[rgba(220,67,54,0.12)] text-ws-red border-[rgba(220,67,54,0.30)]",
+  high: "bg-[rgba(11,138,62,0.14)] text-[#9ee19b] border-[rgba(158,225,155,0.32)]",
+  medium: "bg-[rgba(196,155,60,0.18)] text-[#f2d994] border-[rgba(242,217,148,0.32)]",
+  low: "bg-[rgba(220,67,54,0.18)] text-[#f3a49d] border-[rgba(243,164,157,0.30)]",
 } as const;
 
 type Phase = "idle" | "parsing" | "clarifying" | "result";
@@ -87,7 +89,7 @@ interface DivergenceForkData {
   assumption: string;
 }
 
-interface PlanImpactView {
+interface MetricTileData {
   label: string;
   value: string;
   context: string;
@@ -181,26 +183,18 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
           monthlyDiscretionary: snapshot.monthlyDiscretionary,
           projectedDate: nextSimulation.projectedDate ?? null,
           daysUntilPurchase,
-          projectedFreeCashAtPurchase:
-            intent.intentType === "planned_purchase" ? nextSimulation.freeCashBefore : null,
-          bufferAtPurchase:
-            intent.intentType === "planned_purchase" ? nextSimulation.bufferMonthsAfter : null,
-          recurringImpactMonthly:
-            intent.intentType === "recurring"
-              ? nextSimulation.recurringImpactMonthly ?? null
-              : null,
-          gapToSafeBudget:
-            intent.intentType === "big_goal"
-              ? clampMoney(Math.max(intent.amount - (nextSimulation.maxSafeOneTimeSpend ?? 0), 0))
-              : null,
+          projectedFreeCashAtPurchase: nextSimulation.projectedFreeCashAtPurchase ?? null,
+          bufferAtPurchase: nextSimulation.bufferMonthsAfter,
+          recurringImpactMonthly: nextSimulation.recurringImpactMonthly ?? null,
+          gapToSafeBudget: nextSimulation.gapToSafeBudget ?? null,
           monthsToGoal: nextSimulation.monthsToGoal ?? null,
           requiredMonthlySavings: nextSimulation.monthlySavingsNeeded ?? null,
-          targetBufferMonths: 2,
+          targetBufferMonths: nextSimulation.targetBufferMonths,
           divergenceDelta90d: nextDivergence?.deltaAt90Days ?? null,
         },
         reasonCodes: nextSimulation.reasons,
         clarificationUsed,
-        assumptions: buildAssumptions(parsed, intent),
+        assumptions: buildAssumptions(parsed, intent, nextSimulation),
       };
 
       fetchExplanation(payload as unknown as Record<string, unknown>);
@@ -330,21 +324,21 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
     setClarifyBudgetCap("");
   }, []);
 
-  const planImpact = useMemo(() => {
+  const metricTiles = useMemo(() => {
     if (!resolvedIntent || !simulation) {
       return null;
     }
 
-    return buildPlanImpactView(resolvedIntent, simulation, snapshot);
+    return buildMetricTiles(resolvedIntent, simulation, snapshot);
   }, [resolvedIntent, simulation, snapshot]);
 
   const placeholder = PLACEHOLDERS[placeholderIndex];
 
   return (
     <section className="rounded-[16px] bg-gradient-to-b from-ws-white to-[rgba(245,244,240,0.75)] border border-ws-border p-5 sm:p-6">
-      <div className="max-w-[760px] mx-auto">
+      <div className="max-w-[860px] mx-auto">
         <p className="text-[11px] tracking-[0.12em] uppercase text-ws-grey">Decision Mode</p>
-        <h3 className="text-[1.45rem] sm:text-[1.8rem] font-bold text-ws-charcoal mt-2 leading-tight">
+        <h3 className="text-[1.45rem] sm:text-[1.9rem] font-bold text-ws-charcoal mt-2 leading-tight">
           Ask once. See the fork before you spend.
         </h3>
 
@@ -357,7 +351,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
               onKeyDown={handleKeyDown}
               disabled={phase === "parsing"}
               placeholder={`e.g. ${placeholder}`}
-              className="w-full bg-transparent text-sm sm:text-base text-ws-charcoal outline-none placeholder:text-ws-light-grey disabled:opacity-60"
+              className="w-full bg-transparent text-sm sm:text-base text-ws-charcoal outline-none placeholder:text-ws-grey disabled:opacity-60"
             />
           </div>
 
@@ -388,7 +382,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
               exit={{ opacity: 0, y: -6 }}
               className="text-xs text-ws-grey mt-3"
             >
-              Parsing intent and building deterministic scenario...
+              Parsing intent and composing your decision beat...
             </motion.p>
           )}
         </AnimatePresence>
@@ -403,7 +397,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
               className="mt-5 p-4 rounded-[12px] bg-ws-off-white border border-ws-border"
             >
               <p className="text-sm text-ws-charcoal font-medium">
-                {parsedIntent.clarificationQuestion ?? "A quick detail to tighten the simulation:"}
+                {parsedIntent.clarificationQuestion ?? "One detail needed to run this scenario:"}
               </p>
 
               {missingFields.includes("amount") && (
@@ -511,7 +505,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
         </AnimatePresence>
 
         <AnimatePresence>
-          {phase === "result" && simulation && resolvedIntent && planImpact && (
+          {phase === "result" && simulation && resolvedIntent && metricTiles && (
             <motion.div
               key="result"
               initial={{ opacity: 0, y: 12 }}
@@ -534,54 +528,40 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                   </span>
                 </div>
 
-                <p className={`mt-4 text-[2rem] sm:text-[2.4rem] leading-none font-bold ${VERDICT_STYLE[simulation.verdict].text}`}>
+                <p className={`mt-4 text-[2.05rem] sm:text-[2.7rem] leading-none font-bold ${VERDICT_STYLE[simulation.verdict].text}`}>
                   {VERDICT_STYLE[simulation.verdict].label}
                 </p>
-                <p className="text-sm text-[rgba(255,255,255,0.84)] mt-2 min-h-[20px]">
-                  {explanationLoading
-                    ? "Generating decision beat..."
-                    : explanation?.headline ?? "Deterministic scenario complete."}
+                <p className="text-sm sm:text-base text-[rgba(255,255,255,0.9)] mt-3">
+                  {simulation.ruleText}
+                </p>
+                <p className="text-xs text-[rgba(255,255,255,0.72)] mt-1 min-h-[18px]">
+                  {explanationLoading ? "Narrating scenario..." : explanation?.headline ?? "Scenario complete."}
+                </p>
+              </div>
+
+              <div className="mt-4 rounded-[14px] border border-ws-border bg-ws-white p-4 sm:p-5">
+                {divergence ? (
+                  <ForkScene projection={divergence} />
+                ) : (
+                  <GoalRunway simulation={simulation} amount={resolvedIntent.amount} />
+                )}
+              </div>
+
+              <div className="mt-4 rounded-[14px] border border-ws-border bg-ws-white p-4">
+                <p className="text-[10px] uppercase tracking-[0.12em] text-ws-grey">Recommended action</p>
+                <p className="text-lg font-bold text-ws-charcoal mt-2">
+                  {simulation.recommendedAction.title}
+                </p>
+                <p className="text-sm text-ws-grey mt-1">
+                  {simulation.recommendedAction.detail}
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-                <ImpactTile
-                  label="Free cash"
-                  value={formatSignedCurrency(simulation.freeCashAfter)}
-                  context={`${simulation.daysUntilPay} days to payday`}
-                  colorClass={
-                    simulation.freeCashAfter < 0
-                      ? "text-ws-red"
-                      : simulation.freeCashAfter < snapshot.dailyBurnRate * 3
-                        ? "text-ws-yellow"
-                        : "text-ws-green"
-                  }
-                />
-                <ImpactTile
-                  label="Buffer"
-                  value={`${simulation.bufferMonthsAfter.toFixed(1)} mo`}
-                  context="of essentials"
-                  colorClass={
-                    simulation.bufferMonthsAfter >= 2
-                      ? "text-ws-green"
-                      : simulation.bufferMonthsAfter >= 1
-                        ? "text-ws-yellow"
-                        : "text-ws-red"
-                  }
-                />
-                <ImpactTile
-                  label={planImpact.label}
-                  value={planImpact.value}
-                  context={planImpact.context}
-                  colorClass={planImpact.colorClass}
-                />
+                {metricTiles.map((tile) => (
+                  <MetricTile key={tile.label} tile={tile} />
+                ))}
               </div>
-
-              {divergence && (
-                <div className="mt-4 rounded-[12px] border border-ws-border bg-ws-white p-3 sm:p-4">
-                  <DivergenceFork projection={divergence} />
-                </div>
-              )}
 
               <div className="mt-4 rounded-[12px] border border-ws-border bg-ws-white p-4">
                 {explanationLoading ? (
@@ -602,7 +582,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                   onClick={() => setShowReasoning((v) => !v)}
                   className="text-xs text-ws-grey underline mt-3"
                 >
-                  {showReasoning ? "Hide reasoning" : "Show reasoning"}
+                  {showReasoning ? "Hide how Odysseus decided" : "How Odysseus decided"}
                 </button>
 
                 <AnimatePresence>
@@ -645,17 +625,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
   );
 }
 
-function ImpactTile({
-  label,
-  value,
-  context,
-  colorClass,
-}: {
-  label: string;
-  value: string;
-  context: string;
-  colorClass: string;
-}) {
+function MetricTile({ tile }: { tile: MetricTileData }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -663,21 +633,23 @@ function ImpactTile({
       transition={{ duration: 0.25 }}
       className="rounded-[12px] border border-ws-border bg-ws-white p-3"
     >
-      <p className="text-[10px] uppercase tracking-wide text-ws-grey">{label}</p>
-      <p className={`text-[1.2rem] font-bold tabular-nums mt-1 ${colorClass}`}>{value}</p>
-      <p className="text-[11px] text-ws-grey mt-0.5">{context}</p>
+      <p className="text-[10px] uppercase tracking-wide text-ws-grey">{tile.label}</p>
+      <p className={`text-[1.22rem] font-bold tabular-nums mt-1 ${tile.colorClass}`}>
+        {tile.value}
+      </p>
+      <p className="text-[11px] text-ws-grey mt-0.5">{tile.context}</p>
     </motion.div>
   );
 }
 
-const SVG_W = 320;
-const SVG_H = 150;
-const PAD_L = 30;
-const PAD_R = 22;
-const PAD_T = 16;
-const PAD_B = 30;
+const SVG_W = 420;
+const SVG_H = 200;
+const PAD_L = 34;
+const PAD_R = 34;
+const PAD_T = 24;
+const PAD_B = 34;
 
-function DivergenceFork({ projection }: { projection: DivergenceForkData }) {
+function ForkScene({ projection }: { projection: DivergenceForkData }) {
   const { baseline, withDecision, weeks, deltaAt90Days, assumption } = projection;
 
   const allValues = [...baseline, ...withDecision];
@@ -696,96 +668,120 @@ function DivergenceFork({ projection }: { projection: DivergenceForkData }) {
     return PAD_T + plotH - ((v - minVal) / range) * plotH;
   }
 
-  function path(values: number[]): string {
+  function buildPath(values: number[]): string {
     return values
       .map((v, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(v).toFixed(1)}`)
       .join(" ");
   }
 
-  const basePath = path(baseline);
-  const altPath = path(withDecision);
+  const baselinePath = buildPath(baseline);
+  const alternatePath = buildPath(withDecision);
+
   const endX = toX(weeks - 1);
   const baseEndY = toY(baseline[weeks - 1]);
   const altEndY = toY(withDecision[weeks - 1]);
-  const gapMid = (baseEndY + altEndY) / 2;
-  const pathLen = plotW * 1.2;
+  const midY = (baseEndY + altEndY) / 2;
+  const pathLen = plotW * 1.35;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <p className="text-[10px] uppercase tracking-wide text-ws-grey">90-day divergence</p>
-      <p className="text-[11px] text-ws-grey mt-0.5">{assumption}</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35 }}>
+      <p className="text-[10px] uppercase tracking-[0.12em] text-ws-grey">The fork</p>
+      <p className="text-xs text-ws-grey mt-1">{assumption}</p>
+
       <svg
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-        className="w-full mt-2"
+        className="w-full mt-3"
         role="img"
         aria-label={`90-day divergence of ${Math.round(deltaAt90Days)} dollars`}
       >
         <motion.path
-          d={basePath}
+          d={baselinePath}
           fill="none"
           stroke="#0b8a3e"
-          strokeWidth={2}
+          strokeWidth={2.8}
           strokeLinecap="round"
           initial={{ strokeDasharray: pathLen, strokeDashoffset: pathLen }}
           animate={{ strokeDashoffset: 0 }}
-          transition={{ duration: 1, ease: "easeOut" }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
         />
 
         <motion.path
-          d={altPath}
+          d={alternatePath}
           fill="none"
           stroke="#c49b3c"
-          strokeWidth={2}
+          strokeWidth={2.8}
           strokeLinecap="round"
-          strokeDasharray="4 4"
-          initial={{ strokeDasharray: `4 4`, strokeDashoffset: pathLen }}
+          strokeDasharray="5 4"
+          initial={{ strokeDasharray: "5 4", strokeDashoffset: pathLen }}
           animate={{ strokeDashoffset: 0 }}
-          transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
+          transition={{ duration: 0.95, delay: 0.52, ease: "easeOut" }}
+        />
+
+        <motion.circle
+          cx={toX(Math.floor((weeks - 1) / 2))}
+          cy={toY((baseline[Math.floor((weeks - 1) / 2)] + withDecision[Math.floor((weeks - 1) / 2)]) / 2)}
+          r={3.8}
+          fill="rgba(50,48,47,0.2)"
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.44, duration: 0.24 }}
         />
 
         <motion.line
-          x1={endX + 6}
+          x1={endX + 9}
           y1={baseEndY}
-          x2={endX + 6}
+          x2={endX + 9}
           y2={altEndY}
           stroke="rgba(50,48,47,0.22)"
-          strokeWidth={1}
+          strokeWidth={1.2}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.4, duration: 0.25 }}
+          transition={{ delay: 1.42, duration: 0.25 }}
         />
 
         <motion.text
-          x={endX + 12}
-          y={gapMid + 4}
+          x={endX + 16}
+          y={midY + 4}
           fill="rgb(50,48,47)"
-          fontSize={10}
+          fontSize={11}
           fontWeight={700}
-          initial={{ opacity: 0, x: endX + 20 }}
-          animate={{ opacity: 1, x: endX + 12 }}
-          transition={{ delay: 1.65, duration: 0.3 }}
+          initial={{ opacity: 0, x: endX + 24 }}
+          animate={{ opacity: 1, x: endX + 16 }}
+          transition={{ delay: 1.72, duration: 0.34 }}
         >
           -{formatCurrency(Math.abs(deltaAt90Days))}
         </motion.text>
 
-        <text x={PAD_L} y={SVG_H - 6} fill="rgb(104,102,100)" fontSize={9}>
+        <text x={PAD_L} y={SVG_H - 8} fill="rgb(104,102,100)" fontSize={9}>
           Week 1
         </text>
-        <text x={endX - 22} y={SVG_H - 6} fill="rgb(104,102,100)" fontSize={9}>
+        <text x={endX - 18} y={SVG_H - 8} fill="rgb(104,102,100)" fontSize={9}>
           Week {weeks}
-        </text>
-
-        <circle cx={PAD_L} cy={SVG_H - 18} r={3} fill="#0b8a3e" />
-        <text x={PAD_L + 7} y={SVG_H - 15} fill="rgb(104,102,100)" fontSize={8}>
-          Baseline
-        </text>
-
-        <circle cx={PAD_L + 58} cy={SVG_H - 18} r={3} fill="#c49b3c" />
-        <text x={PAD_L + 65} y={SVG_H - 15} fill="rgb(104,102,100)" fontSize={8}>
-          With decision
         </text>
       </svg>
     </motion.div>
+  );
+}
+
+function GoalRunway({ simulation, amount }: { simulation: DecisionSimulationV2; amount: number }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.12em] text-ws-grey">Goal runway</p>
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-[10px] bg-ws-off-white px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-ws-grey">Target</p>
+          <p className="text-sm font-bold text-ws-charcoal mt-1">{formatCurrency(amount)}</p>
+        </div>
+        <div className="rounded-[10px] bg-ws-off-white px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-ws-grey">Safe now</p>
+          <p className="text-sm font-bold text-ws-charcoal mt-1">{formatCurrency(simulation.maxSafeOneTimeSpend ?? 0)}</p>
+        </div>
+        <div className="rounded-[10px] bg-ws-off-white px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-ws-grey">Gap</p>
+          <p className="text-sm font-bold text-ws-charcoal mt-1">{formatCurrency(simulation.gapToSafeBudget ?? 0)}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -939,70 +935,159 @@ function toDomainIntent(parsed: ParsedDecisionIntentV2): DecisionIntent {
   return intent;
 }
 
-function buildPlanImpactView(
+function buildMetricTiles(
   intent: DecisionIntent,
   simulation: DecisionSimulationV2,
   snapshot: CashflowSnapshot
-): PlanImpactView {
-  if (intent.intentType === "recurring") {
-    const drag = simulation.recurringImpactMonthly ?? 0;
+): MetricTileData[] {
+  const primary = buildPrimaryMetric(intent, simulation, snapshot);
+
+  const bufferTile: MetricTileData = {
+    label: "Buffer",
+    value: `${simulation.bufferMonthsAfter.toFixed(1)} mo`,
+    context: `target: ${simulation.targetBufferMonths.toFixed(1)} months`,
+    colorClass:
+      simulation.bufferMonthsAfter >= simulation.targetBufferMonths
+        ? "text-ws-green"
+        : simulation.bufferMonthsAfter >= 1
+          ? "text-ws-yellow"
+          : "text-ws-red",
+  };
+
+  const consequence = buildConsequenceMetric(intent, simulation);
+
+  return [primary, bufferTile, consequence];
+}
+
+function buildPrimaryMetric(
+  intent: DecisionIntent,
+  simulation: DecisionSimulationV2,
+  snapshot: CashflowSnapshot
+): MetricTileData {
+  if (intent.intentType === "planned_purchase") {
     return {
-      label: "Monthly drag",
-      value: `-${formatCurrency(Math.abs(drag))}`,
-      context: "added monthly spend",
-      colorClass: drag > snapshot.potentialSurplus ? "text-ws-red" : "text-ws-yellow",
+      label: "Cash on purchase date",
+      value: formatSignedCurrency(
+        simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore
+      ),
+      context: simulation.projectedDate ? `on ${simulation.projectedDate}` : "on target date",
+      colorClass:
+        (simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore) < 0
+          ? "text-ws-red"
+          : "text-ws-charcoal",
     };
   }
 
   if (intent.intentType === "big_goal") {
-    if (simulation.monthlySavingsNeeded) {
+    return {
+      label: "Safe budget now",
+      value: formatCurrency(simulation.maxSafeOneTimeSpend ?? 0),
+      context: `${simulation.targetBufferMonths} month rule`,
+      colorClass: "text-ws-charcoal",
+    };
+  }
+
+  if (intent.intentType === "recurring") {
+    return {
+      label: "Monthly drag",
+      value: `-${formatCurrency(Math.abs(simulation.recurringImpactMonthly ?? 0))}`,
+      context: "new recurring burn",
+      colorClass:
+        simulation.verdict === "risky" ? "text-ws-red" : "text-ws-yellow",
+    };
+  }
+
+  return {
+    label: "Free cash until payday",
+    value: formatSignedCurrency(simulation.freeCashAfter),
+    context: `${simulation.daysUntilPay} days to payday`,
+    colorClass:
+      simulation.freeCashAfter < 0
+        ? "text-ws-red"
+        : simulation.freeCashAfter < snapshot.dailyBurnRate * 3
+          ? "text-ws-yellow"
+          : "text-ws-green",
+  };
+}
+
+function buildConsequenceMetric(
+  intent: DecisionIntent,
+  simulation: DecisionSimulationV2
+): MetricTileData {
+  if (intent.intentType === "big_goal") {
+    return {
+      label: "Gap to safe budget",
+      value: formatCurrency(simulation.gapToSafeBudget ?? 0),
+      context:
+        simulation.monthsToGoal && simulation.monthlySavingsNeeded
+          ? `${formatCurrency(simulation.monthlySavingsNeeded)}/mo for ${simulation.monthsToGoal} months`
+          : "no immediate safe path",
+      colorClass:
+        (simulation.gapToSafeBudget ?? 0) > 0 ? "text-ws-red" : "text-ws-green",
+    };
+  }
+
+  if (intent.intentType === "planned_purchase") {
+    if (simulation.bestSafeDate) {
       return {
-        label: "Monthly needed",
-        value: formatCurrency(simulation.monthlySavingsNeeded),
-        context: simulation.monthsToGoal
-          ? `${simulation.monthsToGoal} months to goal`
-          : "to close safe-budget gap",
+        label: "Earliest safe date",
+        value: simulation.bestSafeDate,
+        context: "first modeled date inside guardrails",
         colorClass: "text-ws-yellow",
       };
     }
 
     return {
-      label: "Safe budget",
-      value: formatCurrency(simulation.maxSafeOneTimeSpend ?? 0),
-      context: "one-time spend cap now",
-      colorClass: "text-ws-green",
+      label: "Safe price at date",
+      value: formatCurrency(simulation.safePriceAtPurchase ?? 0),
+      context: `vs ${formatCurrency(intent.amount)} target`,
+      colorClass:
+        (simulation.safePriceAtPurchase ?? 0) >= intent.amount
+          ? "text-ws-green"
+          : "text-ws-red",
     };
   }
 
-  if (simulation.reasons.includes("FREE_CASH_NEGATIVE")) {
+  if (intent.intentType === "recurring") {
     return {
-      label: "Plan impact",
-      value: "At risk",
-      context: "near-term cash turns negative",
-      colorClass: "text-ws-red",
+      label: "Modeled recurring cap",
+      value: formatCurrency(simulation.maxSafeRecurringMonthly ?? 0),
+      context: "monthly amount to stay within rules",
+      colorClass:
+        (simulation.maxSafeRecurringMonthly ?? 0) <= 0
+          ? "text-ws-red"
+          : "text-ws-charcoal",
     };
   }
 
   return {
-    label: "Surplus impact",
-    value: `-${formatCurrency(intent.amount)}`,
-    context:
-      intent.intentType === "planned_purchase" && simulation.projectedDate
-        ? `one-time on ${simulation.projectedDate}`
-        : "one-time decision",
-    colorClass: "text-ws-charcoal",
+    label: "Safe spend now",
+    value: formatCurrency(simulation.maxSafeOneTimeSpend ?? 0),
+    context: `at ${simulation.targetBufferMonths}-month buffer`,
+    colorClass:
+      simulation.maxSafeOneTimeSpend && simulation.maxSafeOneTimeSpend > 0
+        ? "text-ws-charcoal"
+        : "text-ws-red",
   };
 }
 
-function buildAssumptions(parsed: ParsedDecisionIntentV2, intent: DecisionIntent): string[] {
+function buildAssumptions(
+  parsed: ParsedDecisionIntentV2,
+  intent: DecisionIntent,
+  simulation: DecisionSimulationV2
+): string[] {
   const assumptions: string[] = [];
 
   if (intent.intentType === "planned_purchase" && parsed.horizon.kind !== "date") {
     assumptions.push(`Timing interpreted as ${formatHorizonLabel(parsed.horizon)}`);
   }
 
+  if (intent.intentType === "planned_purchase" && simulation.projectedDate) {
+    assumptions.push(`Safe-date scan window is 120 days from target date`);
+  }
+
   if (intent.intentType === "recurring" && parsed.cadence === "monthly") {
-    assumptions.push("Recurring amount modeled as monthly");
+    assumptions.push("Recurring amount modeled in monthly terms");
   }
 
   return assumptions.slice(0, 2);
@@ -1027,13 +1112,16 @@ function getTodayISO(snapshot: CashflowSnapshot): string {
     latestTransactionDate?: string;
   };
 
-  const candidate = withDate.snapshotDate ?? withDate.snapshotDateISO ?? withDate.latestTransactionDate;
+  const candidate =
+    withDate.snapshotDate ?? withDate.snapshotDateISO ?? withDate.latestTransactionDate;
   if (typeof candidate === "string" && ISO_DATE_RE.test(candidate)) {
     return candidate;
   }
 
   const now = new Date();
-  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const utc = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
   return utc.toISOString().slice(0, 10);
 }
 
@@ -1073,7 +1161,8 @@ function projectPlannedDivergence(
     : 0;
 
   const hitWeekRaw = Math.floor(daysUntilPurchase / 7);
-  const hitWeek = hitWeekRaw >= 0 && hitWeekRaw < DIVERGENCE_WEEKS ? hitWeekRaw : -1;
+  const hitWeek =
+    hitWeekRaw >= 0 && hitWeekRaw < DIVERGENCE_WEEKS ? hitWeekRaw : -1;
 
   const baseline: number[] = [];
   const withDecision: number[] = [];
@@ -1086,7 +1175,8 @@ function projectPlannedDivergence(
     const baseVal = baseAccum * (1 + WEEKLY_RATE * (week + 1));
     baseline.push(clampMoney(baseVal));
 
-    const reduction = week === hitWeek ? Math.min(intent.amount, weeklyContribution) : 0;
+    const reduction =
+      week === hitWeek ? Math.min(intent.amount, weeklyContribution) : 0;
     altAccum += Math.max(weeklyContribution - reduction, 0);
     const altVal = altAccum * (1 + WEEKLY_RATE * (week + 1));
     withDecision.push(clampMoney(altVal));
@@ -1107,5 +1197,3 @@ function projectPlannedDivergence(
         : "Assumes purchase happens after the 90-day window",
   };
 }
-
-

@@ -27,6 +27,9 @@ export interface ParsedDecisionIntentV2 {
   clarificationFields: ClarificationField[];
 }
 
+
+export type ParseSource = "openai" | "fallback";
+
 interface RawParsedIntentV2 {
   intentType: string;
   amount: number | null;
@@ -513,11 +516,13 @@ export function toDecisionIntent(parsed: ParsedDecisionIntentV2): DecisionIntent
   return intent;
 }
 
-export async function parseDecisionIntentV2(input: string): Promise<ParsedDecisionIntentV2> {
+export async function parseDecisionIntentV2WithSource(
+  input: string
+): Promise<{ parsed: ParsedDecisionIntentV2; source: ParseSource }> {
   const baseline = fallbackParse(input);
 
   if (!isApiKeyValid()) {
-    return baseline;
+    return { parsed: baseline, source: "fallback" };
   }
 
   try {
@@ -536,16 +541,25 @@ export async function parseDecisionIntentV2(input: string): Promise<ParsedDecisi
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      return baseline;
+      return { parsed: baseline, source: "fallback" };
     }
 
     const raw = JSON.parse(content) as RawParsedIntentV2;
-    return normalizeParsedIntent(raw, baseline);
+    return {
+      parsed: normalizeParsedIntent(raw, baseline),
+      source: "openai",
+    };
   } catch {
-    return baseline;
+    return { parsed: baseline, source: "fallback" };
   }
+}
+
+export async function parseDecisionIntentV2(input: string): Promise<ParsedDecisionIntentV2> {
+  const { parsed } = await parseDecisionIntentV2WithSource(input);
+  return parsed;
 }
 
 export function buildParseFallbackResponse(input: string): ParsedDecisionIntentV2 {
   return fallbackParse(input);
 }
+

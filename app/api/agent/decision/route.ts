@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  generateDecisionExplanation,
+  generateDecisionExplanationWithSource,
   type DecisionExplanationInput,
   type DecisionExplanationInputV2,
 } from "@/lib/agent/skills/decision-explanation";
@@ -21,8 +21,11 @@ export async function POST(request: Request) {
         );
       }
 
-      const result = await generateDecisionExplanation(body);
-      return NextResponse.json(result);
+      const { result, source } = await generateDecisionExplanationWithSource(body);
+      return NextResponse.json({
+        ...result,
+        source,
+      });
     }
 
     if (
@@ -35,8 +38,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await generateDecisionExplanation(body);
-    return NextResponse.json(result);
+    const { result, source } = await generateDecisionExplanationWithSource(body);
+    return NextResponse.json({
+      ...result,
+      source,
+    });
   } catch {
     return NextResponse.json(
       { error: "Failed to generate decision explanation" },

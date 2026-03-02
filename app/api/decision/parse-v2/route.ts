@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   buildParseFallbackResponse,
-  parseDecisionIntentV2,
+  parseDecisionIntentV2WithSource,
 } from "@/lib/agent/skills/decision-intent-v2";
 
 export async function POST(request: Request) {
@@ -27,13 +27,20 @@ export async function POST(request: Request) {
       needsClarification: true,
       clarificationQuestion: "What are you considering spending?",
       clarificationFields: ["amount"],
+      source: "fallback",
     });
   }
 
   try {
-    const parsed = await parseDecisionIntentV2(input);
-    return NextResponse.json(parsed);
+    const { parsed, source } = await parseDecisionIntentV2WithSource(input);
+    return NextResponse.json({
+      ...parsed,
+      source,
+    });
   } catch {
-    return NextResponse.json(buildParseFallbackResponse(input));
+    return NextResponse.json({
+      ...buildParseFallbackResponse(input),
+      source: "fallback",
+    });
   }
 }
