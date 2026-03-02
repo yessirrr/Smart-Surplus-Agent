@@ -1,55 +1,122 @@
+
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { formatCurrency } from "@/lib/utils";
-import { simulateDecision, projectDivergence } from "@/lib/domain/decision-simulator";
 import { useAgent } from "@/lib/agent/use-agent";
 import type { CashflowSnapshot } from "@/lib/domain/cashflow-model";
-import type { DecisionSimulation, DivergenceProjection } from "@/lib/domain/decision-simulator";
-import type { DecisionExplanationResult } from "@/lib/agent/skills/decision-explanation";
-import type { DecisionIntent, SpendCadence } from "@/lib/agent/skills/intent-parser";
+import {
+  clampMoney,
+  diffDaysISO,
+  projectDivergence,
+  simulateDecisionByIntent,
+  type DecisionSimulationV2,
+} from "@/lib/domain/decision-simulator";
+import {
+  assertValidIntent,
+  type DecisionIntent,
+  type SpendCadence,
+  type TimeHorizon,
+} from "@/lib/domain/decision-intent";
+import type {
+  ClarificationField,
+  ParsedDecisionIntentV2,
+} from "@/lib/agent/skills/decision-intent-v2";
+import type {
+  DecisionExplanationInputV2,
+  DecisionExplanationResult,
+} from "@/lib/agent/skills/decision-explanation";
+
+const PLACEHOLDERS = [
+  "$80 dinner tonight",
+  "Netflix $16/month",
+  "Couch for $1,000 next month",
+  "Can I buy a $10,000 car?",
+];
 
 const REASON_LABELS: Record<string, string> = {
-  fully_covered: "fully covered by free cash",
-  surplus_negative: "surplus goes negative",
-  buffer_low: "buffer below 1 month",
-  buffer_critical: "buffer critically low",
-  free_cash_negative: "short on cash before payday",
-  investment_disrupted: "investment contribution at risk",
-  streak_broken: "commitment streak impacted",
+  FREE_CASH_NEGATIVE: "Free cash goes below zero before payday",
+  BUFFER_LT_1: "Buffer drops below 1 month of essentials",
+  BUFFER_LT_2: "Buffer drops below 2 months of essentials",
+  FUTURE_DATE_EVAL: "Scenario evaluated at a future date",
+  PROJECTED_CHEQUING_LOW: "Projected chequing balance is low at purchase time",
+  GOAL_REQUIRES_PLANNING: "Goal needs a savings plan before purchasing",
+  GAP_TO_SAFE_BUDGET: "Amount exceeds safe one-time budget",
+  NO_SAVINGS_CAPACITY: "No monthly savings capacity detected",
+  RECURRING_RAISES_BURN: "Recurring cost raises ongoing burn rate",
+  SURPLUS_NEGATIVE: "Potential surplus turns negative",
 };
 
-const VERDICT_CONFIG = {
-  safe: { color: "text-ws-green", bg: "bg-ws-green", label: "Safe" },
-  tight: { color: "text-ws-yellow", bg: "bg-ws-yellow", label: "Tight" },
-  risky: { color: "text-ws-red", bg: "bg-ws-red", label: "Risky" },
+const VERDICT_STYLE = {
+  safe: {
+    text: "text-ws-green",
+    chip: "bg-[rgba(11,138,62,0.12)] text-ws-green border-[rgba(11,138,62,0.32)]",
+    label: "Safe",
+  },
+  tight: {
+    text: "text-ws-yellow",
+    chip: "bg-[rgba(196,155,60,0.16)] text-ws-yellow border-[rgba(196,155,60,0.32)]",
+    label: "Tight",
+  },
+  risky: {
+    text: "text-ws-red",
+    chip: "bg-[rgba(220,67,54,0.12)] text-ws-red border-[rgba(220,67,54,0.30)]",
+    label: "Risky",
+  },
 } as const;
 
-const CADENCE_LABELS: Record<string, string> = {
-  one_time: "One-time",
-  weekly: "Weekly",
-  monthly: "Monthly",
-};
+const CONFIDENCE_STYLE = {
+  high: "bg-[rgba(11,138,62,0.12)] text-ws-green border-[rgba(11,138,62,0.32)]",
+  medium: "bg-[rgba(196,155,60,0.16)] text-ws-yellow border-[rgba(196,155,60,0.32)]",
+  low: "bg-[rgba(220,67,54,0.12)] text-ws-red border-[rgba(220,67,54,0.30)]",
+} as const;
 
 type Phase = "idle" | "parsing" | "clarifying" | "result";
+type ClarifyDateMode = "today" | "this_week" | "this_month" | "date";
 
 interface DecisionModeProps {
   snapshot: CashflowSnapshot;
 }
 
+interface DivergenceForkData {
+  weeks: number;
+  baseline: number[];
+  withDecision: number[];
+  deltaAt90Days: number;
+  assumption: string;
+}
+
+interface PlanImpactView {
+  label: string;
+  value: string;
+  context: string;
+  colorClass: string;
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DIVERGENCE_WEEKS = 12;
+const WEEKLY_RATE = 0.07 / 52;
+
 export function DecisionMode({ snapshot }: DecisionModeProps) {
   const [input, setInput] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
-  const [intent, setIntent] = useState<DecisionIntent | null>(null);
-  const [simulation, setSimulation] = useState<DecisionSimulation | null>(null);
-  const [projection, setProjection] = useState<DivergenceProjection | null>(null);
-  const [showReasoning, setShowReasoning] = useState(false);
-  const abortRef = useRef<AbortController | undefined>(undefined);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
-  // Clarification state
+  const [parsedIntent, setParsedIntent] = useState<ParsedDecisionIntentV2 | null>(null);
+  const [resolvedIntent, setResolvedIntent] = useState<DecisionIntent | null>(null);
+  const [simulation, setSimulation] = useState<DecisionSimulationV2 | null>(null);
+  const [divergence, setDivergence] = useState<DivergenceForkData | null>(null);
+  const [showReasoning, setShowReasoning] = useState(false);
+
   const [clarifyAmount, setClarifyAmount] = useState("");
   const [clarifyCadence, setClarifyCadence] = useState<SpendCadence | null>(null);
+  const [clarifyDateMode, setClarifyDateMode] = useState<ClarifyDateMode>("this_week");
+  const [clarifyDateValue, setClarifyDateValue] = useState("");
+  const [clarifyGoalName, setClarifyGoalName] = useState("");
+  const [clarifyBudgetCap, setClarifyBudgetCap] = useState("");
+
+  const abortRef = useRef<AbortController | null>(null);
 
   const {
     data: explanation,
@@ -57,439 +124,563 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
     generate: fetchExplanation,
   } = useAgent<DecisionExplanationResult>("/api/agent/decision");
 
-  const runSimulation = useCallback(
-    (amount: number, cadence: SpendCadence, horizon: DecisionIntent["horizon"]) => {
-      const sim = simulateDecision(amount, snapshot);
-      const proj = projectDivergence(amount, cadence, snapshot);
-      setSimulation(sim);
-      setProjection(proj);
-      setPhase("result");
-      setShowReasoning(false);
+  useEffect(() => {
+    if (phase !== "idle" || input.trim().length > 0) {
+      return;
+    }
 
-      fetchExplanation({
-        proposedAmount: amount,
-        verdict: sim.verdict,
-        verdictReasons: sim.verdictReasons,
-        freeCashBefore: snapshot.freeCashUntilPay,
-        freeCashAfter: sim.newFreeCash,
-        daysUntilPay: snapshot.daysUntilNextPay,
-        surplusBefore: snapshot.currentSurplus,
-        surplusAfter: sim.newMonthlySurplus,
-        bufferMonths: sim.bufferMonths,
-        investmentAtRisk: sim.investmentAtRisk,
-        streakAtRisk: sim.streakAtRisk,
-        cadence,
-        horizon,
-        deltaAt90Days: proj.deltaAt90Days,
-        assumption: proj.assumption,
-      });
+    const timer = window.setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
+    }, 2600);
+
+    return () => window.clearInterval(timer);
+  }, [phase, input]);
+
+  const missingFields = parsedIntent?.clarificationFields ?? [];
+
+  const confidenceLabel =
+    explanation?.confidence ??
+    (parsedIntent?.needsClarification ? "low" : simulation ? "medium" : "high");
+
+  const runScenario = useCallback(
+    (parsed: ParsedDecisionIntentV2, clarificationUsed: boolean) => {
+      const intent = toDomainIntent(parsed);
+      const nextSimulation = simulateDecisionByIntent(intent, snapshot);
+      const nextDivergence = buildDivergenceData(intent, nextSimulation, snapshot);
+
+      setResolvedIntent(intent);
+      setSimulation(nextSimulation);
+      setDivergence(nextDivergence);
+      setShowReasoning(false);
+      setPhase("result");
+
+      const daysUntilPurchase =
+        intent.intentType === "planned_purchase" && nextSimulation.projectedDate
+          ? diffDaysISO(getTodayISO(snapshot), nextSimulation.projectedDate)
+          : null;
+
+      const payload: DecisionExplanationInputV2 = {
+        version: "v2",
+        intent: {
+          title: parsed.title,
+          intentType: intent.intentType,
+          cadence: intent.cadence,
+          horizon: intent.horizon,
+          categoryHint: intent.categoryHint,
+        },
+        simulation: nextSimulation,
+        facts: {
+          freeCashUntilPay: snapshot.freeCashUntilPay,
+          daysUntilNextPay: snapshot.daysUntilNextPay,
+          bufferMonthsBefore: nextSimulation.bufferMonthsBefore,
+          bufferMonthsAfter: nextSimulation.bufferMonthsAfter,
+          monthlySurplus: snapshot.currentSurplus,
+          potentialSurplus: snapshot.potentialSurplus,
+          monthlyIncome: snapshot.monthlyIncome,
+          monthlyEssentials: snapshot.monthlyEssentials,
+          monthlyDiscretionary: snapshot.monthlyDiscretionary,
+          projectedDate: nextSimulation.projectedDate ?? null,
+          daysUntilPurchase,
+          projectedFreeCashAtPurchase:
+            intent.intentType === "planned_purchase" ? nextSimulation.freeCashBefore : null,
+          bufferAtPurchase:
+            intent.intentType === "planned_purchase" ? nextSimulation.bufferMonthsAfter : null,
+          recurringImpactMonthly:
+            intent.intentType === "recurring"
+              ? nextSimulation.recurringImpactMonthly ?? null
+              : null,
+          gapToSafeBudget:
+            intent.intentType === "big_goal"
+              ? clampMoney(Math.max(intent.amount - (nextSimulation.maxSafeOneTimeSpend ?? 0), 0))
+              : null,
+          monthsToGoal: nextSimulation.monthsToGoal ?? null,
+          requiredMonthlySavings: nextSimulation.monthlySavingsNeeded ?? null,
+          targetBufferMonths: 2,
+          divergenceDelta90d: nextDivergence?.deltaAt90Days ?? null,
+        },
+        reasonCodes: nextSimulation.reasons,
+        clarificationUsed,
+        assumptions: buildAssumptions(parsed, intent),
+      };
+
+      fetchExplanation(payload as unknown as Record<string, unknown>);
     },
     [snapshot, fetchExplanation]
   );
+
+  const hydrateClarificationState = useCallback((parsed: ParsedDecisionIntentV2) => {
+    setClarifyAmount(parsed.amount !== null ? String(parsed.amount) : "");
+    setClarifyCadence(parsed.cadence);
+
+    if (parsed.horizon.kind === "date") {
+      setClarifyDateMode("date");
+      setClarifyDateValue(typeof parsed.horizon.value === "string" ? parsed.horizon.value : "");
+    } else if (parsed.horizon.kind === "today") {
+      setClarifyDateMode("today");
+      setClarifyDateValue("");
+    } else if (parsed.horizon.kind === "this_month") {
+      setClarifyDateMode("this_month");
+      setClarifyDateValue("");
+    } else {
+      setClarifyDateMode("this_week");
+      setClarifyDateValue("");
+    }
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    // Cancel any in-flight parse
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setPhase("parsing");
-    setIntent(null);
+    setParsedIntent(null);
+    setResolvedIntent(null);
     setSimulation(null);
-    setProjection(null);
+    setDivergence(null);
 
     try {
-      const res = await fetch("/api/decision/parse", {
+      const res = await fetch("/api/decision/parse-v2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: trimmed }),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error("Parse failed");
-      const parsed = (await res.json()) as DecisionIntent;
 
+      if (!res.ok) {
+        throw new Error(`Parse failed: ${res.status}`);
+      }
+
+      const parsed = (await res.json()) as ParsedDecisionIntentV2;
       if (controller.signal.aborted) return;
 
-      setIntent(parsed);
+      setParsedIntent(parsed);
+      hydrateClarificationState(parsed);
 
-      if (parsed.needsClarification || parsed.amount === null) {
-        setClarifyAmount(parsed.amount !== null ? String(parsed.amount) : "");
-        setClarifyCadence(parsed.cadence);
+      if (parsed.needsClarification) {
         setPhase("clarifying");
         return;
       }
 
-      // All resolved — run simulation
-      runSimulation(
-        parsed.amount,
-        parsed.cadence ?? "one_time",
-        parsed.horizon
-      );
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
+      runScenario(parsed, false);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
       setPhase("idle");
     }
-  }, [input, runSimulation]);
+  }, [input, hydrateClarificationState, runScenario]);
+
+  const handleClarifySubmit = useCallback(() => {
+    if (!parsedIntent) return;
+
+    const resolvedParsed = applyClarifications(parsedIntent, {
+      amountInput: clarifyAmount,
+      cadence: clarifyCadence,
+      dateMode: clarifyDateMode,
+      dateValue: clarifyDateValue,
+      goalName: clarifyGoalName,
+      budgetCapInput: clarifyBudgetCap,
+    });
+
+    setParsedIntent(resolvedParsed);
+
+    if (resolvedParsed.needsClarification) {
+      setPhase("clarifying");
+      return;
+    }
+
+    runScenario(resolvedParsed, true);
+  }, [
+    parsedIntent,
+    clarifyAmount,
+    clarifyCadence,
+    clarifyDateMode,
+    clarifyDateValue,
+    clarifyGoalName,
+    clarifyBudgetCap,
+    runScenario,
+  ]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") handleSubmit();
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        handleSubmit();
+      }
     },
     [handleSubmit]
   );
 
-  const handleClarifySubmit = useCallback(() => {
-    const amount = clarifyAmount ? parseFloat(clarifyAmount) : intent?.amount;
-    if (!amount || amount <= 0) return;
-
-    const cadence = clarifyCadence ?? intent?.cadence ?? "one_time";
-    runSimulation(amount, cadence, intent?.horizon ?? "this_week");
-  }, [clarifyAmount, clarifyCadence, intent, runSimulation]);
-
   const handleReset = useCallback(() => {
     setInput("");
     setPhase("idle");
-    setIntent(null);
+    setParsedIntent(null);
+    setResolvedIntent(null);
     setSimulation(null);
-    setProjection(null);
+    setDivergence(null);
     setShowReasoning(false);
+    setClarifyAmount("");
+    setClarifyCadence(null);
+    setClarifyDateMode("this_week");
+    setClarifyDateValue("");
+    setClarifyGoalName("");
+    setClarifyBudgetCap("");
   }, []);
 
-  const resolvedCadence = intent?.cadence ?? clarifyCadence ?? "one_time";
+  const planImpact = useMemo(() => {
+    if (!resolvedIntent || !simulation) {
+      return null;
+    }
+
+    return buildPlanImpactView(resolvedIntent, simulation, snapshot);
+  }, [resolvedIntent, simulation, snapshot]);
+
+  const placeholder = PLACEHOLDERS[placeholderIndex];
 
   return (
-    <div className="bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
-      {/* Title */}
-      <p className="text-sm font-bold text-ws-charcoal">Decision Mode</p>
-      <p className="text-xs text-ws-grey mt-1">Ask Odysseus before you spend</p>
+    <section className="rounded-[16px] bg-gradient-to-b from-ws-white to-[rgba(245,244,240,0.75)] border border-ws-border p-5 sm:p-6">
+      <div className="max-w-[760px] mx-auto">
+        <p className="text-[11px] tracking-[0.12em] uppercase text-ws-grey">Decision Mode</p>
+        <h3 className="text-[1.45rem] sm:text-[1.8rem] font-bold text-ws-charcoal mt-2 leading-tight">
+          Ask once. See the fork before you spend.
+        </h3>
 
-      {/* Input row */}
-      <div className="flex items-center gap-3 mt-4">
-        <div className="flex-1 border-b border-ws-border pb-1">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="e.g. $80 dinner tonight"
-            disabled={phase === "parsing"}
-            className="w-full text-sm text-ws-charcoal bg-transparent outline-none placeholder:text-ws-light-grey disabled:opacity-50"
-          />
+        <div className="mt-5 flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1 border-b border-ws-border pb-1.5">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={phase === "parsing"}
+              placeholder={`e.g. ${placeholder}`}
+              className="w-full bg-transparent text-sm sm:text-base text-ws-charcoal outline-none placeholder:text-ws-light-grey disabled:opacity-60"
+            />
+          </div>
+
+          {phase === "idle" || phase === "parsing" ? (
+            <button
+              onClick={handleSubmit}
+              disabled={!input.trim() || phase === "parsing"}
+              className="px-5 py-2.5 rounded-[72px] bg-ws-charcoal text-white text-sm font-bold disabled:opacity-35"
+            >
+              {phase === "parsing" ? "Parsing..." : "Check"}
+            </button>
+          ) : (
+            <button
+              onClick={handleReset}
+              className="px-5 py-2.5 rounded-[72px] bg-ws-off-white text-ws-charcoal text-sm font-bold"
+            >
+              Clear
+            </button>
+          )}
         </div>
-        {phase === "idle" || phase === "parsing" ? (
-          <button
-            onClick={handleSubmit}
-            disabled={!input.trim() || phase === "parsing"}
-            className="px-4 py-2 rounded-[72px] bg-ws-charcoal text-white text-sm font-bold transition-opacity disabled:opacity-30"
-          >
-            {phase === "parsing" ? "..." : "Check"}
-          </button>
-        ) : (
-          <button
-            onClick={handleReset}
-            className="px-4 py-2 rounded-[72px] bg-ws-off-white text-ws-charcoal text-sm font-bold"
-          >
-            Clear
-          </button>
-        )}
-      </div>
 
-      {/* Clarification phase */}
-      <AnimatePresence>
-        {phase === "clarifying" && intent && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="overflow-hidden"
-          >
-            <div className="pt-4">
-              <p className="text-sm text-ws-charcoal">
-                {intent.clarificationQuestion ?? "How much are you considering spending?"}
+        <AnimatePresence initial={false}>
+          {phase === "parsing" && (
+            <motion.p
+              key="parsing"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="text-xs text-ws-grey mt-3"
+            >
+              Parsing intent and building deterministic scenario...
+            </motion.p>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {phase === "clarifying" && parsedIntent && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="mt-5 p-4 rounded-[12px] bg-ws-off-white border border-ws-border"
+            >
+              <p className="text-sm text-ws-charcoal font-medium">
+                {parsedIntent.clarificationQuestion ?? "A quick detail to tighten the simulation:"}
               </p>
 
-              {/* Amount clarification */}
-              {intent.amount === null && (
-                <div className="flex items-center gap-1 border-b border-ws-border pb-1 mt-3">
+              {missingFields.includes("amount") && (
+                <div className="mt-3 flex items-center gap-1 border-b border-ws-border pb-1.5">
                   <span className="text-lg font-bold text-ws-charcoal">$</span>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={clarifyAmount}
-                    onChange={(e) => {
-                      const cleaned = e.target.value.replace(/[^0-9.]/g, "");
-                      const parts = cleaned.split(".");
-                      setClarifyAmount(
-                        parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned
-                      );
-                    }}
+                    onChange={(e) => setClarifyAmount(cleanMoneyInput(e.target.value))}
                     placeholder="0"
-                    className="flex-1 text-lg font-bold text-ws-charcoal tabular-nums bg-transparent outline-none placeholder:text-ws-light-grey"
+                    className="flex-1 bg-transparent outline-none text-lg font-bold text-ws-charcoal placeholder:text-ws-light-grey"
                   />
                 </div>
               )}
 
-              {/* Cadence clarification */}
-              {intent.cadence === null && (
-                <div className="flex gap-2 mt-3">
-                  {(["one_time", "monthly"] as const).map((c) => (
+              {missingFields.includes("cadence") && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {([
+                    { label: "One-time", value: "one_time" },
+                    { label: "Weekly", value: "weekly" },
+                    { label: "Monthly", value: "monthly" },
+                  ] as const).map((option) => (
                     <button
-                      key={c}
-                      onClick={() => setClarifyCadence(c)}
-                      className={`px-3 py-1.5 rounded-[72px] text-xs font-bold transition-colors ${
-                        clarifyCadence === c
-                          ? "bg-ws-charcoal text-white"
-                          : "bg-ws-off-white text-ws-grey"
+                      key={option.value}
+                      onClick={() => setClarifyCadence(option.value)}
+                      className={`px-3 py-1.5 rounded-[72px] text-xs font-bold border transition-colors ${
+                        clarifyCadence === option.value
+                          ? "bg-ws-charcoal text-white border-ws-charcoal"
+                          : "bg-ws-white text-ws-grey border-ws-border"
                       }`}
                     >
-                      {CADENCE_LABELS[c]}
+                      {option.label}
                     </button>
                   ))}
                 </div>
               )}
 
-              <button
-                onClick={handleClarifySubmit}
-                disabled={
-                  (intent.amount === null && (!clarifyAmount || parseFloat(clarifyAmount) <= 0)) ||
-                  (intent.cadence === null && clarifyCadence === null)
-                }
-                className="mt-4 px-4 py-2 rounded-[72px] bg-ws-charcoal text-white text-sm font-bold transition-opacity disabled:opacity-30"
-              >
-                Check
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Result phase */}
-      <AnimatePresence>
-        {phase === "result" && simulation && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="overflow-hidden"
-          >
-            <div className="pt-5">
-              {/* Cadence chip */}
-              {resolvedCadence !== "one_time" && (
-                <div className="flex justify-center mb-2">
-                  <span className="text-[10px] text-ws-grey bg-ws-off-white rounded-[72px] px-2 py-0.5">
-                    {projection?.assumption}
-                  </span>
+              {(missingFields.includes("date") || missingFields.includes("relative_days")) && (
+                <div className="mt-3">
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { label: "Today", value: "today" },
+                      { label: "This week", value: "this_week" },
+                      { label: "This month", value: "this_month" },
+                      { label: "Pick date", value: "date" },
+                    ] as const).map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => setClarifyDateMode(option.value)}
+                        className={`px-3 py-1.5 rounded-[72px] text-xs font-bold border transition-colors ${
+                          clarifyDateMode === option.value
+                            ? "bg-ws-charcoal text-white border-ws-charcoal"
+                            : "bg-ws-white text-ws-grey border-ws-border"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {clarifyDateMode === "date" && (
+                    <input
+                      type="text"
+                      value={clarifyDateValue}
+                      onChange={(e) => setClarifyDateValue(e.target.value.trim())}
+                      placeholder="YYYY-MM-DD"
+                      className="mt-2 w-full sm:w-[220px] bg-ws-white border border-ws-border rounded-[8px] px-3 py-2 text-sm text-ws-charcoal outline-none"
+                    />
+                  )}
                 </div>
               )}
 
-              {/* Verdict */}
-              <VerdictIndicator
-                verdict={simulation.verdict}
-                headline={explanation?.headline}
-                loading={explanationLoading}
-              />
-
-              {/* Impact indicators */}
-              <ImpactGrid simulation={simulation} snapshot={snapshot} />
-
-              {/* Divergence fork visualization */}
-              {projection && projection.deltaAt90Days > 0 && (
-                <DivergenceFork projection={projection} />
+              {missingFields.includes("goal_name") && (
+                <input
+                  type="text"
+                  value={clarifyGoalName}
+                  onChange={(e) => setClarifyGoalName(e.target.value)}
+                  placeholder="What are you planning to buy?"
+                  className="mt-3 w-full bg-ws-white border border-ws-border rounded-[8px] px-3 py-2 text-sm text-ws-charcoal outline-none"
+                />
               )}
 
-              {/* AI explanation */}
-              <div className="mt-4">
-                {explanationLoading && <ExplanationSkeleton />}
-                {!explanationLoading && explanation && (
-                  <>
-                    <p className="text-sm text-ws-charcoal leading-relaxed">
-                      {explanation.explanation}
-                    </p>
-                    <p className="text-xs text-ws-grey italic mt-1">
-                      {explanation.suggestion}
-                    </p>
-                  </>
-                )}
+              {missingFields.includes("budget_cap") && (
+                <div className="mt-3 flex items-center gap-1 border-b border-ws-border pb-1.5">
+                  <span className="text-base font-bold text-ws-charcoal">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={clarifyBudgetCap}
+                    onChange={(e) => setClarifyBudgetCap(cleanMoneyInput(e.target.value))}
+                    placeholder="Optional budget cap"
+                    className="flex-1 bg-transparent outline-none text-sm text-ws-charcoal placeholder:text-ws-light-grey"
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={handleClarifySubmit}
+                className="mt-4 px-4 py-2 rounded-[72px] bg-ws-charcoal text-white text-sm font-bold"
+              >
+                Continue
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {phase === "result" && simulation && resolvedIntent && planImpact && (
+            <motion.div
+              key="result"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.3 }}
+              className="mt-6"
+            >
+              <div className="rounded-[18px] bg-ws-charcoal text-white p-5 sm:p-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`text-[11px] uppercase tracking-[0.08em] rounded-[72px] px-2.5 py-1 border ${VERDICT_STYLE[simulation.verdict].chip}`}
+                  >
+                    {VERDICT_STYLE[simulation.verdict].label}
+                  </span>
+                  <span
+                    className={`text-[11px] uppercase tracking-[0.08em] rounded-[72px] px-2.5 py-1 border ${CONFIDENCE_STYLE[confidenceLabel]}`}
+                  >
+                    {confidenceLabel} confidence
+                  </span>
+                </div>
+
+                <p className={`mt-4 text-[2rem] sm:text-[2.4rem] leading-none font-bold ${VERDICT_STYLE[simulation.verdict].text}`}>
+                  {VERDICT_STYLE[simulation.verdict].label}
+                </p>
+                <p className="text-sm text-[rgba(255,255,255,0.84)] mt-2 min-h-[20px]">
+                  {explanationLoading
+                    ? "Generating decision beat..."
+                    : explanation?.headline ?? "Deterministic scenario complete."}
+                </p>
               </div>
 
-              {/* Show reasoning toggle */}
-              <div className="mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                <ImpactTile
+                  label="Free cash"
+                  value={formatSignedCurrency(simulation.freeCashAfter)}
+                  context={`${simulation.daysUntilPay} days to payday`}
+                  colorClass={
+                    simulation.freeCashAfter < 0
+                      ? "text-ws-red"
+                      : simulation.freeCashAfter < snapshot.dailyBurnRate * 3
+                        ? "text-ws-yellow"
+                        : "text-ws-green"
+                  }
+                />
+                <ImpactTile
+                  label="Buffer"
+                  value={`${simulation.bufferMonthsAfter.toFixed(1)} mo`}
+                  context="of essentials"
+                  colorClass={
+                    simulation.bufferMonthsAfter >= 2
+                      ? "text-ws-green"
+                      : simulation.bufferMonthsAfter >= 1
+                        ? "text-ws-yellow"
+                        : "text-ws-red"
+                  }
+                />
+                <ImpactTile
+                  label={planImpact.label}
+                  value={planImpact.value}
+                  context={planImpact.context}
+                  colorClass={planImpact.colorClass}
+                />
+              </div>
+
+              {divergence && (
+                <div className="mt-4 rounded-[12px] border border-ws-border bg-ws-white p-3 sm:p-4">
+                  <DivergenceFork projection={divergence} />
+                </div>
+              )}
+
+              <div className="mt-4 rounded-[12px] border border-ws-border bg-ws-white p-4">
+                {explanationLoading ? (
+                  <div className="animate-pulse space-y-2">
+                    <div className="h-3 rounded bg-ws-light-grey" />
+                    <div className="h-3 rounded bg-ws-light-grey w-5/6" />
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-ws-charcoal leading-relaxed">
+                      {explanation?.explanation ?? "Simulation complete."}
+                    </p>
+                    <p className="text-xs text-ws-grey mt-1">{explanation?.suggestion}</p>
+                  </>
+                )}
+
                 <button
                   onClick={() => setShowReasoning((v) => !v)}
-                  className="text-[10px] text-ws-grey underline cursor-pointer"
+                  className="text-xs text-ws-grey underline mt-3"
                 >
                   {showReasoning ? "Hide reasoning" : "Show reasoning"}
                 </button>
+
                 <AnimatePresence>
                   {showReasoning && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="bg-ws-off-white rounded-[6px] px-3 py-2 mt-2">
-                        <p className="text-[10px] text-ws-grey">
-                          Factors:{" "}
-                          {simulation.verdictReasons
-                            .map((r) => REASON_LABELS[r] ?? r)
-                            .join(", ")}
+                      <div className="mt-3 rounded-[8px] bg-ws-off-white p-3 space-y-2">
+                        <p className="text-[11px] text-ws-grey uppercase tracking-wide">Machine reasons</p>
+                        <p className="text-xs text-ws-charcoal">
+                          {simulation.reasons.map((r) => REASON_LABELS[r] ?? r).join(" | ")}
+                        </p>
+
+                        {explanation?.assumptions && explanation.assumptions.length > 0 && (
+                          <>
+                            <p className="text-[11px] text-ws-grey uppercase tracking-wide mt-2">Assumptions</p>
+                            <p className="text-xs text-ws-charcoal">
+                              {explanation.assumptions.join(" | ")}
+                            </p>
+                          </>
+                        )}
+
+                        <p className="text-[11px] text-ws-grey uppercase tracking-wide mt-2">Parsed intent</p>
+                        <p className="text-xs text-ws-charcoal">
+                          {parsedIntent?.title ?? "Decision"} | {resolvedIntent.intentType} | {resolvedIntent.cadence} | {formatHorizonLabel(resolvedIntent.horizon)}
                         </p>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </section>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────
-
-function VerdictIndicator({
-  verdict,
-  headline,
-  loading,
+function ImpactTile({
+  label,
+  value,
+  context,
+  colorClass,
 }: {
-  verdict: "safe" | "tight" | "risky";
-  headline?: string;
-  loading: boolean;
+  label: string;
+  value: string;
+  context: string;
+  colorClass: string;
 }) {
-  const config = VERDICT_CONFIG[verdict];
   return (
     <motion.div
-      key={verdict}
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="flex flex-col items-center py-4"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="rounded-[12px] border border-ws-border bg-ws-white p-3"
     >
-      <div className="flex items-center gap-2">
-        <span className={`w-3 h-3 rounded-full ${config.bg}`} />
-        <span className={`text-xl font-bold ${config.color}`}>
-          {config.label}
-        </span>
-      </div>
-      <div className="mt-1 min-h-[20px]">
-        {loading && (
-          <div className="w-32 h-3 bg-ws-light-grey rounded animate-pulse" />
-        )}
-        {!loading && headline && (
-          <p className="text-sm text-ws-grey">{headline}</p>
-        )}
-      </div>
+      <p className="text-[10px] uppercase tracking-wide text-ws-grey">{label}</p>
+      <p className={`text-[1.2rem] font-bold tabular-nums mt-1 ${colorClass}`}>{value}</p>
+      <p className="text-[11px] text-ws-grey mt-0.5">{context}</p>
     </motion.div>
   );
 }
 
-function ImpactGrid({
-  simulation,
-  snapshot,
-}: {
-  simulation: DecisionSimulation;
-  snapshot: CashflowSnapshot;
-}) {
-  const surplusColor = simulation.surplusStillPositive
-    ? "text-ws-charcoal"
-    : "text-ws-red";
-
-  const freeCashColor =
-    simulation.newFreeCash < 0
-      ? "text-ws-red"
-      : simulation.newFreeCash < snapshot.dailyBurnRate * 3
-        ? "text-ws-yellow"
-        : "text-ws-green";
-
-  const bufferColor =
-    simulation.bufferMonths >= 2
-      ? "text-ws-green"
-      : simulation.bufferMonths >= 1
-        ? "text-ws-yellow"
-        : "text-ws-red";
-
-  const indicators = [
-    {
-      label: "Surplus Impact",
-      value:
-        simulation.freeCashDelta < 0
-          ? `-${formatCurrency(Math.abs(simulation.freeCashDelta))}`
-          : formatCurrency(simulation.freeCashDelta),
-      color: surplusColor,
-      context: "this month",
-    },
-    {
-      label: "Free Cash",
-      value:
-        simulation.newFreeCash < 0
-          ? `-${formatCurrency(Math.abs(simulation.newFreeCash))}`
-          : formatCurrency(simulation.newFreeCash),
-      color: freeCashColor,
-      context: `${snapshot.daysUntilNextPay} days until payday`,
-    },
-    {
-      label: "Buffer",
-      value: `${simulation.bufferMonths.toFixed(1)} months`,
-      color: bufferColor,
-      context: "of essentials",
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-3 gap-3 mt-4">
-      {indicators.map((ind, i) => (
-        <motion.div
-          key={ind.label}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: i * 0.1 }}
-          className="text-center"
-        >
-          <p className="text-[10px] text-ws-grey uppercase tracking-wide">
-            {ind.label}
-          </p>
-          <p className={`text-sm font-bold mt-1 tabular-nums ${ind.color}`}>
-            {ind.value}
-          </p>
-          <p className="text-[10px] text-ws-grey mt-0.5">{ind.context}</p>
-        </motion.div>
-      ))}
-    </div>
-  );
-}
-
-function ExplanationSkeleton() {
-  return (
-    <div className="animate-pulse">
-      <div className="w-full h-3 bg-ws-light-grey rounded" />
-      <div className="w-4/5 h-3 bg-ws-light-grey rounded mt-2" />
-    </div>
-  );
-}
-
-// ── Divergence Fork SVG ──────────────────────────────────────
-
-const SVG_W = 300;
-const SVG_H = 140;
-const PAD_L = 32;
-const PAD_R = 16;
+const SVG_W = 320;
+const SVG_H = 150;
+const PAD_L = 30;
+const PAD_R = 22;
 const PAD_T = 16;
-const PAD_B = 28;
+const PAD_B = 30;
 
-function DivergenceFork({ projection }: { projection: DivergenceProjection }) {
-  const { baseline, withSpend, weeks, deltaAt90Days } = projection;
+function DivergenceFork({ projection }: { projection: DivergenceForkData }) {
+  const { baseline, withDecision, weeks, deltaAt90Days, assumption } = projection;
 
-  // Scale values to SVG coordinates
-  const allValues = [...baseline, ...withSpend];
+  const allValues = [...baseline, ...withDecision];
   const maxVal = Math.max(...allValues, 1);
   const minVal = Math.min(...allValues, 0);
   const range = maxVal - minVal || 1;
@@ -500,46 +691,37 @@ function DivergenceFork({ projection }: { projection: DivergenceProjection }) {
   function toX(i: number): number {
     return PAD_L + (i / (weeks - 1)) * plotW;
   }
+
   function toY(v: number): number {
     return PAD_T + plotH - ((v - minVal) / range) * plotH;
   }
 
-  function buildPath(values: number[]): string {
+  function path(values: number[]): string {
     return values
       .map((v, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(v).toFixed(1)}`)
       .join(" ");
   }
 
-  const baselinePath = buildPath(baseline);
-  const spendPath = buildPath(withSpend);
-
+  const basePath = path(baseline);
+  const altPath = path(withDecision);
   const endX = toX(weeks - 1);
   const baseEndY = toY(baseline[weeks - 1]);
-  const spendEndY = toY(withSpend[weeks - 1]);
-  const gapMidY = (baseEndY + spendEndY) / 2;
-
-  // Total path length estimate for animation
+  const altEndY = toY(withDecision[weeks - 1]);
+  const gapMid = (baseEndY + altEndY) / 2;
   const pathLen = plotW * 1.2;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4, delay: 0.3 }}
-      className="mt-4"
-    >
-      <p className="text-[10px] text-ws-grey uppercase tracking-wide mb-1">
-        90-day portfolio divergence
-      </p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+      <p className="text-[10px] uppercase tracking-wide text-ws-grey">90-day divergence</p>
+      <p className="text-[11px] text-ws-grey mt-0.5">{assumption}</p>
       <svg
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-        className="w-full"
+        className="w-full mt-2"
         role="img"
-        aria-label={`Portfolio divergence: $${Math.round(deltaAt90Days)} difference over 90 days`}
+        aria-label={`90-day divergence of ${Math.round(deltaAt90Days)} dollars`}
       >
-        {/* Baseline path — draws first */}
         <motion.path
-          d={baselinePath}
+          d={basePath}
           fill="none"
           stroke="#0b8a3e"
           strokeWidth={2}
@@ -549,65 +731,381 @@ function DivergenceFork({ projection }: { projection: DivergenceProjection }) {
           transition={{ duration: 1, ease: "easeOut" }}
         />
 
-        {/* With-spend path — draws second */}
         <motion.path
-          d={spendPath}
+          d={altPath}
           fill="none"
           stroke="#c49b3c"
           strokeWidth={2}
           strokeLinecap="round"
-          strokeDasharray="4 3"
-          initial={{ strokeDasharray: `4 3`, strokeDashoffset: pathLen }}
+          strokeDasharray="4 4"
+          initial={{ strokeDasharray: `4 4`, strokeDashoffset: pathLen }}
           animate={{ strokeDashoffset: 0 }}
-          transition={{ duration: 1, delay: 0.6, ease: "easeOut" }}
+          transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
         />
 
-        {/* Gap bracket line */}
         <motion.line
           x1={endX + 6}
           y1={baseEndY}
           x2={endX + 6}
-          y2={spendEndY}
-          stroke="rgba(50,48,47,0.2)"
+          y2={altEndY}
+          stroke="rgba(50,48,47,0.22)"
           strokeWidth={1}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.6, duration: 0.3 }}
+          transition={{ delay: 1.4, duration: 0.25 }}
         />
 
-        {/* Delta text — lands last */}
         <motion.text
           x={endX + 12}
-          y={gapMidY + 4}
+          y={gapMid + 4}
           fill="rgb(50,48,47)"
           fontSize={10}
           fontWeight={700}
-          fontFamily="Inter, sans-serif"
           initial={{ opacity: 0, x: endX + 20 }}
           animate={{ opacity: 1, x: endX + 12 }}
-          transition={{ delay: 1.8, duration: 0.4 }}
+          transition={{ delay: 1.65, duration: 0.3 }}
         >
-          -${Math.round(deltaAt90Days)}
+          -{formatCurrency(Math.abs(deltaAt90Days))}
         </motion.text>
 
-        {/* Week labels */}
-        <text x={PAD_L} y={SVG_H - 4} fill="rgb(104,102,100)" fontSize={8}>
+        <text x={PAD_L} y={SVG_H - 6} fill="rgb(104,102,100)" fontSize={9}>
           Week 1
         </text>
-        <text x={endX - 20} y={SVG_H - 4} fill="rgb(104,102,100)" fontSize={8}>
+        <text x={endX - 22} y={SVG_H - 6} fill="rgb(104,102,100)" fontSize={9}>
           Week {weeks}
         </text>
 
-        {/* Legend dots */}
-        <circle cx={PAD_L} cy={SVG_H - 16} r={3} fill="#0b8a3e" />
-        <text x={PAD_L + 6} y={SVG_H - 13} fill="rgb(104,102,100)" fontSize={7}>
+        <circle cx={PAD_L} cy={SVG_H - 18} r={3} fill="#0b8a3e" />
+        <text x={PAD_L + 7} y={SVG_H - 15} fill="rgb(104,102,100)" fontSize={8}>
           Baseline
         </text>
-        <circle cx={PAD_L + 52} cy={SVG_H - 16} r={3} fill="#c49b3c" />
-        <text x={PAD_L + 58} y={SVG_H - 13} fill="rgb(104,102,100)" fontSize={7}>
-          With spend
+
+        <circle cx={PAD_L + 58} cy={SVG_H - 18} r={3} fill="#c49b3c" />
+        <text x={PAD_L + 65} y={SVG_H - 15} fill="rgb(104,102,100)" fontSize={8}>
+          With decision
         </text>
       </svg>
     </motion.div>
   );
 }
+
+function cleanMoneyInput(raw: string): string {
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  const [head, ...tail] = cleaned.split(".");
+  return tail.length > 0 ? `${head}.${tail.join("")}` : head;
+}
+
+function parseMoneyInput(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? clampMoney(parsed) : null;
+}
+
+function parseBudgetCap(raw: string): number | null {
+  const parsed = parseMoneyInput(raw);
+  return parsed !== null ? parsed : null;
+}
+
+function applyClarifications(
+  parsed: ParsedDecisionIntentV2,
+  values: {
+    amountInput: string;
+    cadence: SpendCadence | null;
+    dateMode: ClarifyDateMode;
+    dateValue: string;
+    goalName: string;
+    budgetCapInput: string;
+  }
+): ParsedDecisionIntentV2 {
+  const next: ParsedDecisionIntentV2 = {
+    ...parsed,
+    clarificationFields: [...parsed.clarificationFields],
+  };
+
+  if (parsed.clarificationFields.includes("amount")) {
+    next.amount = parseMoneyInput(values.amountInput);
+  }
+
+  if (parsed.clarificationFields.includes("cadence")) {
+    next.cadence = values.cadence;
+
+    if (next.intentType === "recurring" && values.cadence === "one_time") {
+      next.intentType =
+        next.horizon.kind === "today" || next.horizon.kind === "this_week"
+          ? "impulse"
+          : "planned_purchase";
+    }
+  }
+
+  if (
+    parsed.clarificationFields.includes("date") ||
+    parsed.clarificationFields.includes("relative_days")
+  ) {
+    next.horizon =
+      values.dateMode === "date" && ISO_DATE_RE.test(values.dateValue)
+        ? { kind: "date", value: values.dateValue }
+        : values.dateMode === "today"
+          ? { kind: "today" }
+          : values.dateMode === "this_month"
+            ? { kind: "this_month" }
+            : { kind: "this_week" };
+  }
+
+  if (parsed.clarificationFields.includes("goal_name") && values.goalName.trim()) {
+    next.title = `Buy ${values.goalName.trim()}`;
+  }
+
+  const cap = parseBudgetCap(values.budgetCapInput);
+  if (parsed.clarificationFields.includes("budget_cap") && cap !== null) {
+    next.title = `${next.title} (cap ${formatCurrency(cap)})`;
+  }
+
+  const unresolved: ClarificationField[] = [];
+
+  if (next.amount === null) {
+    unresolved.push("amount");
+  }
+
+  if (next.intentType === "recurring" && next.cadence === null) {
+    unresolved.push("cadence");
+  }
+
+  if (
+    next.intentType === "planned_purchase" &&
+    next.horizon.kind !== "date" &&
+    next.horizon.kind !== "relative_days" &&
+    parsed.clarificationFields.includes("date")
+  ) {
+    unresolved.push("date");
+  }
+
+  if (next.intentType === "big_goal" && parsed.clarificationFields.includes("goal_name")) {
+    if (next.title.trim().toLowerCase() === "big purchase plan") {
+      unresolved.push("goal_name");
+    }
+  }
+
+  const deduped = [...new Set(unresolved)];
+
+  return {
+    ...next,
+    needsClarification: deduped.length > 0,
+    clarificationFields: deduped,
+    clarificationQuestion: deduped.length > 0 ? getClarificationQuestion(deduped) : null,
+  };
+}
+
+function getClarificationQuestion(fields: ClarificationField[]): string {
+  if (fields.includes("amount")) {
+    return "How much are you considering spending?";
+  }
+
+  if (fields.includes("cadence")) {
+    return "Is this one-time, weekly, or monthly?";
+  }
+
+  if (fields.includes("date") || fields.includes("relative_days")) {
+    return "When would you like to make this purchase?";
+  }
+
+  if (fields.includes("goal_name")) {
+    return "What are you planning to buy?";
+  }
+
+  return "Add one more detail to run this scenario.";
+}
+
+function toDomainIntent(parsed: ParsedDecisionIntentV2): DecisionIntent {
+  if (parsed.amount === null) {
+    throw new Error("Missing amount");
+  }
+
+  const cadence: SpendCadence =
+    parsed.intentType === "recurring"
+      ? parsed.cadence ?? (() => {
+          throw new Error("Missing cadence for recurring intent");
+        })()
+      : "one_time";
+
+  const intent: DecisionIntent = {
+    intentType: parsed.intentType,
+    amount: parsed.amount,
+    cadence,
+    horizon: parsed.horizon,
+    categoryHint: parsed.categoryHint,
+  };
+
+  assertValidIntent(intent);
+  return intent;
+}
+
+function buildPlanImpactView(
+  intent: DecisionIntent,
+  simulation: DecisionSimulationV2,
+  snapshot: CashflowSnapshot
+): PlanImpactView {
+  if (intent.intentType === "recurring") {
+    const drag = simulation.recurringImpactMonthly ?? 0;
+    return {
+      label: "Monthly drag",
+      value: `-${formatCurrency(Math.abs(drag))}`,
+      context: "added monthly spend",
+      colorClass: drag > snapshot.potentialSurplus ? "text-ws-red" : "text-ws-yellow",
+    };
+  }
+
+  if (intent.intentType === "big_goal") {
+    if (simulation.monthlySavingsNeeded) {
+      return {
+        label: "Monthly needed",
+        value: formatCurrency(simulation.monthlySavingsNeeded),
+        context: simulation.monthsToGoal
+          ? `${simulation.monthsToGoal} months to goal`
+          : "to close safe-budget gap",
+        colorClass: "text-ws-yellow",
+      };
+    }
+
+    return {
+      label: "Safe budget",
+      value: formatCurrency(simulation.maxSafeOneTimeSpend ?? 0),
+      context: "one-time spend cap now",
+      colorClass: "text-ws-green",
+    };
+  }
+
+  if (simulation.reasons.includes("FREE_CASH_NEGATIVE")) {
+    return {
+      label: "Plan impact",
+      value: "At risk",
+      context: "near-term cash turns negative",
+      colorClass: "text-ws-red",
+    };
+  }
+
+  return {
+    label: "Surplus impact",
+    value: `-${formatCurrency(intent.amount)}`,
+    context:
+      intent.intentType === "planned_purchase" && simulation.projectedDate
+        ? `one-time on ${simulation.projectedDate}`
+        : "one-time decision",
+    colorClass: "text-ws-charcoal",
+  };
+}
+
+function buildAssumptions(parsed: ParsedDecisionIntentV2, intent: DecisionIntent): string[] {
+  const assumptions: string[] = [];
+
+  if (intent.intentType === "planned_purchase" && parsed.horizon.kind !== "date") {
+    assumptions.push(`Timing interpreted as ${formatHorizonLabel(parsed.horizon)}`);
+  }
+
+  if (intent.intentType === "recurring" && parsed.cadence === "monthly") {
+    assumptions.push("Recurring amount modeled as monthly");
+  }
+
+  return assumptions.slice(0, 2);
+}
+
+function formatSignedCurrency(value: number): string {
+  return value < 0 ? `-${formatCurrency(Math.abs(value))}` : formatCurrency(value);
+}
+
+function formatHorizonLabel(horizon: TimeHorizon): string {
+  if (horizon.kind === "today") return "today";
+  if (horizon.kind === "this_week") return "this week";
+  if (horizon.kind === "this_month") return "this month";
+  if (horizon.kind === "date") return String(horizon.value);
+  return `in ${horizon.value} days`;
+}
+
+function getTodayISO(snapshot: CashflowSnapshot): string {
+  const withDate = snapshot as CashflowSnapshot & {
+    snapshotDate?: string;
+    snapshotDateISO?: string;
+    latestTransactionDate?: string;
+  };
+
+  const candidate = withDate.snapshotDate ?? withDate.snapshotDateISO ?? withDate.latestTransactionDate;
+  if (typeof candidate === "string" && ISO_DATE_RE.test(candidate)) {
+    return candidate;
+  }
+
+  const now = new Date();
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return utc.toISOString().slice(0, 10);
+}
+
+function buildDivergenceData(
+  intent: DecisionIntent,
+  simulation: DecisionSimulationV2,
+  snapshot: CashflowSnapshot
+): DivergenceForkData | null {
+  if (intent.intentType === "big_goal") {
+    return null;
+  }
+
+  if (intent.intentType === "planned_purchase") {
+    return projectPlannedDivergence(intent, simulation, snapshot);
+  }
+
+  const projection = projectDivergence(intent.amount, intent.cadence, snapshot);
+  return {
+    weeks: projection.weeks,
+    baseline: projection.baseline,
+    withDecision: projection.withSpend,
+    deltaAt90Days: projection.deltaAt90Days,
+    assumption: projection.assumption,
+  };
+}
+
+function projectPlannedDivergence(
+  intent: DecisionIntent,
+  simulation: DecisionSimulationV2,
+  snapshot: CashflowSnapshot
+): DivergenceForkData {
+  const weeklyContribution = Math.max(snapshot.potentialSurplus / 4, 0);
+  const todayISO = getTodayISO(snapshot);
+
+  const daysUntilPurchase = simulation.projectedDate
+    ? diffDaysISO(todayISO, simulation.projectedDate)
+    : 0;
+
+  const hitWeekRaw = Math.floor(daysUntilPurchase / 7);
+  const hitWeek = hitWeekRaw >= 0 && hitWeekRaw < DIVERGENCE_WEEKS ? hitWeekRaw : -1;
+
+  const baseline: number[] = [];
+  const withDecision: number[] = [];
+
+  let baseAccum = 0;
+  let altAccum = 0;
+
+  for (let week = 0; week < DIVERGENCE_WEEKS; week++) {
+    baseAccum += weeklyContribution;
+    const baseVal = baseAccum * (1 + WEEKLY_RATE * (week + 1));
+    baseline.push(clampMoney(baseVal));
+
+    const reduction = week === hitWeek ? Math.min(intent.amount, weeklyContribution) : 0;
+    altAccum += Math.max(weeklyContribution - reduction, 0);
+    const altVal = altAccum * (1 + WEEKLY_RATE * (week + 1));
+    withDecision.push(clampMoney(altVal));
+  }
+
+  const deltaAt90Days = clampMoney(
+    baseline[DIVERGENCE_WEEKS - 1] - withDecision[DIVERGENCE_WEEKS - 1]
+  );
+
+  return {
+    weeks: DIVERGENCE_WEEKS,
+    baseline,
+    withDecision,
+    deltaAt90Days,
+    assumption:
+      hitWeek >= 0
+        ? `Assumes one-time hit in ~${daysUntilPurchase} days`
+        : "Assumes purchase happens after the 90-day window",
+  };
+}
+
+

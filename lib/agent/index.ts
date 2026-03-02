@@ -6,6 +6,7 @@ export { generateGoalInsight } from "./skills/goal-insight";
 export { generateCommitmentSummary } from "./skills/commitment-summary";
 export { generateDecisionExplanation } from "./skills/decision-explanation";
 export { parseDecisionIntent } from "./skills/intent-parser";
+export { parseDecisionIntentV2, toDecisionIntent } from "./skills/decision-intent-v2";
 
 // Skill result types
 export type { HabitInsightResult } from "./skills/habit-insight";
@@ -16,8 +17,16 @@ export type {
 } from "./skills/allocation-reasoning";
 export type { GoalInsightResult, GoalInsightInput } from "./skills/goal-insight";
 export type { CommitmentSummaryResult, CommitmentSummaryInput } from "./skills/commitment-summary";
-export type { DecisionExplanationResult, DecisionExplanationInput } from "./skills/decision-explanation";
-export type { DecisionIntent, SpendCadence, TimeHorizon } from "./skills/intent-parser";
+export type {
+  DecisionExplanationResult,
+  DecisionExplanationInput,
+  DecisionExplanationInputV2,
+} from "./skills/decision-explanation";
+export type { DecisionIntent as LegacyDecisionIntent, SpendCadence as LegacySpendCadence, TimeHorizon as LegacyTimeHorizon } from "./skills/intent-parser";
+export type {
+  ParsedDecisionIntentV2,
+  ClarificationField,
+} from "./skills/decision-intent-v2";
 
 // Client hook
 export { useAgent } from "./use-agent";
