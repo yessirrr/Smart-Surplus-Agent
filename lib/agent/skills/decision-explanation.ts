@@ -83,17 +83,18 @@ Hard rules:
 - Do NOT do any math.
 - Do NOT invent any number.
 - Use only supplied values and labels.
-- Keep the tone concise, direct, and practical.
+- Keep language plain and human.
 - Keep recommendation singular and clear.
+- Never use these phrases: "free cash", "buffer months", "daily burn rate".
+- Translate safety language to "emergency cushion" and "minimum safety cushion".
 - Output strict JSON only.
 
 Output:
-- headline: one short sentence
-- explanation: 2-3 short sentences using scenario and rule
-- suggestion: one actionable sentence aligned with recommended action
+- headline: one short human sentence
+- explanation: max 2 sentences, concrete consequence first
+- suggestion: exactly 1 actionable sentence
 - confidence: low | medium | high
 - assumptions: 0-2 short strings when assumptions were used`;
-
 const JSON_SCHEMA = {
   name: "decision_explanation_v2",
   strict: true,
@@ -161,8 +162,8 @@ function fallbackLegacy(input: DecisionExplanationInputLegacy): DecisionExplanat
 
   if (input.verdict === "safe") {
     return {
-      headline: "This fits your current cashflow.",
-      explanation: `${money(input.proposedAmount)}${cadence} stays inside your current near-term limits.${divergence}`,
+      headline: "You’re clear.",
+      explanation: `${money(input.proposedAmount)}${cadence} keeps your account above $0 before your next paycheck and keeps your emergency cushion intact.${divergence}`,
       suggestion: "Proceed if this is still your priority.",
       confidence: "high",
       assumptions: [],
@@ -171,8 +172,8 @@ function fallbackLegacy(input: DecisionExplanationInputLegacy): DecisionExplanat
 
   if (input.verdict === "tight") {
     return {
-      headline: "Doable, but margin gets thin.",
-      explanation: `${money(input.proposedAmount)}${cadence} leaves about ${money(input.freeCashAfter)} until payday in ${input.daysUntilPay} days.${divergence}`,
+      headline: "This stretches your cushion.",
+      explanation: `${money(input.proposedAmount)}${cadence} keeps you above $0 before your next paycheck, but your emergency cushion gets thinner.${divergence}`,
       suggestion: "Reduce the amount or split it across pay cycles.",
       confidence: "medium",
       assumptions: [],
@@ -180,14 +181,13 @@ function fallbackLegacy(input: DecisionExplanationInputLegacy): DecisionExplanat
   }
 
   return {
-    headline: "This breaks your near-term cushion.",
-    explanation: `${money(input.proposedAmount)}${cadence} pushes free cash negative before payday and drops safety room.${divergence}`,
+    headline: "This breaks your safety rule.",
+    explanation: `${money(input.proposedAmount)}${cadence} makes your account dip below $0 before your next paycheck and weakens your emergency cushion.${divergence}`,
     suggestion: "Delay or reduce the spend.",
     confidence: "high",
     assumptions: [],
   };
 }
-
 function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResult {
   const { simulation, facts, intent } = input;
   const confidence = resolveConfidenceV2(input);
@@ -199,13 +199,24 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
     const projected = facts.projectedFreeCashAtPurchase ?? simulation.freeCashBefore;
     const dateLabel = simulation.projectedDate ?? facts.projectedDate ?? "your target date";
     const safeDateLine = simulation.bestSafeDate
-      ? `Earliest modeled safe date is ${simulation.bestSafeDate}.`
+      ? `Earliest safe date is ${simulation.bestSafeDate}.`
       : "No safe date appears in the current search window.";
 
     return {
-      headline: simulation.ruleText,
-      explanation: `At ${dateLabel}, projected cash before purchase is ${money(projected)} and after purchase is ${money(simulation.freeCashAfter)}. Buffer after purchase is ${simulation.bufferMonthsAfter.toFixed(1)} months. ${simulation.verdict === "safe" ? "The buffer rule holds at this date." : safeDateLine}`,
-      suggestion: `${action.title}. ${action.detail}`,
+      headline:
+        projected < 0
+          ? "This breaks your safety rule."
+          : simulation.bufferMonthsAfter < simulation.targetBufferMonths
+            ? "This stretches your cushion."
+            : "You’re clear.",
+      explanation:
+        projected < 0
+          ? `On ${dateLabel}, your projected account balance after purchase is ${money(simulation.freeCashAfter)} and goes below $0. Emergency cushion after purchase is ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials.`
+          : `On ${dateLabel}, projected account balance after purchase is ${money(simulation.freeCashAfter)} and stays above $0. Emergency cushion after purchase is ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials.`,
+      suggestion:
+        simulation.verdict === "risky"
+          ? safeDateLine
+          : `${action.title}. ${action.detail}`,
       confidence,
       assumptions,
     };
@@ -219,12 +230,18 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
 
     const planLine =
       months && required
-        ? `Modeled path: ${money(required)}/month for ${months} months.`
-        : "Current model does not show a monthly savings path yet.";
+        ? `To safely afford this goal, save ${money(required)}/month for ${months} months.`
+        : "Current monthly surplus does not show a safe savings path yet.";
 
     return {
-      headline: simulation.ruleText,
-      explanation: `Safe budget now is ${money(simulation.maxSafeOneTimeSpend ?? 0)} and the modeled gap is ${money(gap)}. ${simulation.verdict === "safe" ? "This goal is currently inside your guardrail." : planLine}`,
+      headline:
+        simulation.verdict === "safe"
+          ? "You’re clear."
+          : "This breaks your safety rule.",
+      explanation:
+        simulation.verdict === "safe"
+          ? `Safe budget today is ${money(simulation.maxSafeOneTimeSpend ?? 0)}, so this goal stays inside your minimum safety cushion.`
+          : `Safe budget today is ${money(simulation.maxSafeOneTimeSpend ?? 0)}, leaving a gap of ${money(gap)}. ${planLine}`,
       suggestion: `${action.title}. ${action.detail}`,
       confidence,
       assumptions,
@@ -233,26 +250,38 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
 
   if (intent.intentType === "recurring") {
     const drag = facts.recurringImpactMonthly ?? simulation.recurringImpactMonthly ?? 0;
-    const cap = simulation.maxSafeRecurringMonthly ?? 0;
+    const newSurplus = simulation.newPotentialSurplus ?? facts.potentialSurplus;
 
     return {
-      headline: simulation.ruleText,
-      explanation: `This adds about ${money(drag)}/month and moves modeled potential surplus to ${money(simulation.newPotentialSurplus ?? facts.potentialSurplus)}. Your modeled recurring cap is around ${money(cap)}/month.`,
+      headline:
+        newSurplus < 0
+          ? "This breaks your safety rule."
+          : simulation.verdict === "tight"
+            ? "This stretches your cushion."
+            : "You’re clear.",
+      explanation: `This adds ${money(drag)}/month of monthly drag. New monthly surplus is ${money(newSurplus)}.`,
       suggestion: `${action.title}. ${action.detail}`,
       confidence,
       assumptions,
     };
   }
 
+  const dipsBelowZero = simulation.freeCashAfter < 0;
   return {
-    headline: simulation.ruleText,
-    explanation: `${intent.title} leaves modeled free cash at ${money(simulation.freeCashAfter)} with buffer at ${simulation.bufferMonthsAfter.toFixed(1)} months. This uses your ${simulation.targetBufferMonths}-month safety rule as the guardrail.`,
+    headline:
+      simulation.verdict === "safe"
+        ? "You’re clear."
+        : simulation.verdict === "tight"
+          ? "This stretches your cushion."
+          : "This breaks your safety rule.",
+    explanation: dipsBelowZero
+      ? `${intent.title} makes your account dip below $0 before your next paycheck. Emergency cushion after this decision is ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials.`
+      : `${intent.title} keeps your account above $0 before your next paycheck. Emergency cushion after this decision is ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials.`,
     suggestion: `${action.title}. ${action.detail}`,
     confidence,
     assumptions,
   };
 }
-
 function getFallback(input: DecisionExplanationInput): DecisionExplanationResult {
   if (isV2Input(input)) {
     return fallbackV2(input);

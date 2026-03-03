@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -37,34 +36,34 @@ const PLACEHOLDERS = [
 ];
 
 const REASON_LABELS: Record<string, string> = {
-  FREE_CASH_NEGATIVE: "Chequing dips below $0 before payday",
-  BUFFER_LT_1: "Buffer falls below 1 month of essentials",
-  BUFFER_LT_2: `Buffer falls below ${TARGET_BUFFER_MONTHS} months of essentials`,
+  FREE_CASH_NEGATIVE: "Account goes negative before next paycheck",
+  BUFFER_LT_1: "Emergency cushion drops below 1 month of essentials",
+  BUFFER_LT_2: `Emergency cushion drops below ${TARGET_BUFFER_MONTHS} months of essentials`,
   FUTURE_DATE_EVAL: "Scenario evaluated at the purchase date",
-  PROJECTED_CHEQUING_LOW: "Projected chequing is too low on purchase date",
+  PROJECTED_CHEQUING_LOW: "Projected account balance is too low on purchase date",
   GOAL_REQUIRES_PLANNING: "Goal requires a savings runway",
-  GAP_TO_SAFE_BUDGET: "Amount exceeds safe one-time budget",
+  GAP_TO_SAFE_BUDGET: "Amount exceeds safe budget today",
   NO_SAVINGS_CAPACITY: "No monthly savings capacity available",
-  RECURRING_RAISES_BURN: "Recurring expense increases burn rate",
-  SURPLUS_NEGATIVE: "Potential surplus turns negative",
-  BUFFER_RULE_HELD: `Holds the ${TARGET_BUFFER_MONTHS}-month buffer rule`,
+  RECURRING_RAISES_BURN: "Recurring expense increases monthly drag",
+  SURPLUS_NEGATIVE: "Monthly surplus turns negative",
+  BUFFER_RULE_HELD: `Emergency cushion stays above ${TARGET_BUFFER_MONTHS} months`,
 };
 
 const VERDICT_STYLE = {
   safe: {
     text: "text-[#cfeec9]",
     chip: "bg-[rgba(11,138,62,0.22)] text-[#9ee19b] border-[rgba(158,225,155,0.36)]",
-    label: "Safe",
+    label: "You're clear.",
   },
   tight: {
     text: "text-[#f2d994]",
     chip: "bg-[rgba(196,155,60,0.22)] text-[#f2d994] border-[rgba(242,217,148,0.34)]",
-    label: "Tight",
+    label: "This stretches your cushion.",
   },
   risky: {
     text: "text-[#f3a49d]",
     chip: "bg-[rgba(220,67,54,0.20)] text-[#f3a49d] border-[rgba(243,164,157,0.34)]",
-    label: "Risky",
+    label: "This breaks your safety rule.",
   },
 } as const;
 
@@ -329,7 +328,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
       return null;
     }
 
-    return buildMetricTiles(resolvedIntent, simulation, snapshot);
+    return buildMetricTiles(resolvedIntent, simulation);
   }, [resolvedIntent, simulation, snapshot]);
 
   const placeholder = PLACEHOLDERS[placeholderIndex];
@@ -532,10 +531,12 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                   {VERDICT_STYLE[simulation.verdict].label}
                 </p>
                 <p className="text-sm sm:text-base text-[rgba(255,255,255,0.9)] mt-3">
-                  {simulation.ruleText}
+                  {buildWhyLine(resolvedIntent, simulation)}
                 </p>
                 <p className="text-xs text-[rgba(255,255,255,0.72)] mt-1 min-h-[18px]">
-                  {explanationLoading ? "Narrating scenario..." : explanation?.headline ?? "Scenario complete."}
+                  {explanationLoading
+                    ? "Narrating scenario..."
+                    : explanation?.headline ?? "Decision translated into plain terms."}
                 </p>
               </div>
 
@@ -557,7 +558,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                 {metricTiles.map((tile) => (
                   <MetricTile key={tile.label} tile={tile} />
                 ))}
@@ -582,7 +583,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                   onClick={() => setShowReasoning((v) => !v)}
                   className="text-xs text-ws-grey underline mt-3"
                 >
-                  {showReasoning ? "Hide how Odysseus decided" : "How Odysseus decided"}
+                  {showReasoning ? "Hide how Odysseus calculated this" : "How Odysseus calculated this"}
                 </button>
 
                 <AnimatePresence>
@@ -597,6 +598,21 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                         <p className="text-[11px] text-ws-grey uppercase tracking-wide">Machine reasons</p>
                         <p className="text-xs text-ws-charcoal">
                           {simulation.reasons.map((r) => REASON_LABELS[r] ?? r).join(" | ")}
+                        </p>
+
+                        <p className="text-[11px] text-ws-grey uppercase tracking-wide mt-2">Paycheck timing</p>
+                        <p className="text-xs text-ws-charcoal">
+                          {simulation.daysUntilPay} days until next paycheck
+                        </p>
+
+                        <p className="text-[11px] text-ws-grey uppercase tracking-wide mt-2">Daily spending pace</p>
+                        <p className="text-xs text-ws-charcoal">
+                          {formatCurrency(snapshot.dailyBurnRate)}/day
+                        </p>
+
+                        <p className="text-[11px] text-ws-grey uppercase tracking-wide mt-2">Raw safety math</p>
+                        <p className="text-xs text-ws-charcoal">
+                          Account before: {formatSignedCurrency(simulation.freeCashBefore)} | Account after: {formatSignedCurrency(simulation.freeCashAfter)} | Cushion before: {simulation.bufferMonthsBefore.toFixed(1)} months | Cushion after: {simulation.bufferMonthsAfter.toFixed(1)} months
                         </p>
 
                         {explanation?.assumptions && explanation.assumptions.length > 0 && (
@@ -625,6 +641,49 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
   );
 }
 
+function buildWhyLine(
+  intent: DecisionIntent,
+  simulation: DecisionSimulationV2
+): string {
+  if (intent.intentType === "planned_purchase") {
+    const projected = simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore;
+    if (projected < 0) {
+      return "Projected account balance goes below $0 on your purchase date.";
+    }
+
+    if (simulation.bufferMonthsAfter < simulation.targetBufferMonths) {
+      return `Emergency cushion drops below the minimum safety cushion: ${simulation.targetBufferMonths} months.`;
+    }
+
+    return "Purchase-date cash stays above $0 and your emergency cushion remains intact.";
+  }
+
+  if (intent.intentType === "big_goal") {
+    if ((simulation.gapToSafeBudget ?? 0) > 0) {
+      return `This goal is above your safe budget today under the ${simulation.targetBufferMonths}-month minimum safety cushion.`;
+    }
+
+    return "This goal fits inside your current safety cushion.";
+  }
+
+  if (intent.intentType === "recurring") {
+    if ((simulation.newPotentialSurplus ?? 0) < 0) {
+      return "This recurring cost turns your monthly surplus negative.";
+    }
+
+    return "This adds monthly drag but keeps your surplus positive.";
+  }
+
+  if (simulation.freeCashAfter < 0) {
+    return "This would make your account go negative before your next paycheck.";
+  }
+
+  if (simulation.bufferMonthsAfter < simulation.targetBufferMonths) {
+    return `This keeps your account above $0, but your emergency cushion drops below ${simulation.targetBufferMonths} months.`;
+  }
+
+  return "Your account stays above $0 before your next paycheck and your emergency cushion stays intact.";
+}
 function MetricTile({ tile }: { tile: MetricTileData }) {
   return (
     <motion.div
@@ -764,27 +823,25 @@ function ForkScene({ projection }: { projection: DivergenceForkData }) {
 }
 
 function GoalRunway({ simulation, amount }: { simulation: DecisionSimulationV2; amount: number }) {
+  const hasPlan = simulation.monthsToGoal && simulation.monthlySavingsNeeded;
+
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-[0.12em] text-ws-grey">Goal runway</p>
-      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-[10px] bg-ws-off-white px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wide text-ws-grey">Target</p>
-          <p className="text-sm font-bold text-ws-charcoal mt-1">{formatCurrency(amount)}</p>
-        </div>
-        <div className="rounded-[10px] bg-ws-off-white px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wide text-ws-grey">Safe now</p>
-          <p className="text-sm font-bold text-ws-charcoal mt-1">{formatCurrency(simulation.maxSafeOneTimeSpend ?? 0)}</p>
-        </div>
-        <div className="rounded-[10px] bg-ws-off-white px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wide text-ws-grey">Gap</p>
-          <p className="text-sm font-bold text-ws-charcoal mt-1">{formatCurrency(simulation.gapToSafeBudget ?? 0)}</p>
-        </div>
+      <p className="text-[10px] uppercase tracking-[0.12em] text-ws-grey">Goal path</p>
+      <div className="mt-3 rounded-[10px] bg-ws-off-white px-3 py-3">
+        {hasPlan ? (
+          <p className="text-sm text-ws-charcoal leading-relaxed">
+            To safely afford {formatCurrency(amount)}, save {formatCurrency(simulation.monthlySavingsNeeded ?? 0)}/month for {simulation.monthsToGoal} months while keeping a minimum safety cushion of {simulation.targetBufferMonths} months.
+          </p>
+        ) : (
+          <p className="text-sm text-ws-charcoal leading-relaxed">
+            Safe budget today is {formatCurrency(simulation.maxSafeOneTimeSpend ?? 0)} under your minimum safety cushion of {simulation.targetBufferMonths} months.
+          </p>
+        )}
       </div>
     </div>
   );
 }
-
 function cleanMoneyInput(raw: string): string {
   const cleaned = raw.replace(/[^0-9.]/g, "");
   const [head, ...tail] = cleaned.split(".");
@@ -937,53 +994,39 @@ function toDomainIntent(parsed: ParsedDecisionIntentV2): DecisionIntent {
 
 function buildMetricTiles(
   intent: DecisionIntent,
-  simulation: DecisionSimulationV2,
-  snapshot: CashflowSnapshot
+  simulation: DecisionSimulationV2
 ): MetricTileData[] {
-  const primary = buildPrimaryMetric(intent, simulation, snapshot);
+  const primary = buildPrimaryMetric(intent, simulation);
+  const secondary = buildSecondaryMetric(intent, simulation);
 
-  const bufferTile: MetricTileData = {
-    label: "Buffer",
-    value: `${simulation.bufferMonthsAfter.toFixed(1)} mo`,
-    context: `target: ${simulation.targetBufferMonths.toFixed(1)} months`,
-    colorClass:
-      simulation.bufferMonthsAfter >= simulation.targetBufferMonths
-        ? "text-ws-green"
-        : simulation.bufferMonthsAfter >= 1
-          ? "text-ws-yellow"
-          : "text-ws-red",
-  };
-
-  const consequence = buildConsequenceMetric(intent, simulation);
-
-  return [primary, bufferTile, consequence];
+  return [primary, secondary];
 }
 
 function buildPrimaryMetric(
   intent: DecisionIntent,
-  simulation: DecisionSimulationV2,
-  snapshot: CashflowSnapshot
+  simulation: DecisionSimulationV2
 ): MetricTileData {
   if (intent.intentType === "planned_purchase") {
+    const projected = simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore;
     return {
-      label: "Cash on purchase date",
-      value: formatSignedCurrency(
-        simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore
-      ),
-      context: simulation.projectedDate ? `on ${simulation.projectedDate}` : "on target date",
-      colorClass:
-        (simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore) < 0
-          ? "text-ws-red"
-          : "text-ws-charcoal",
+      label: simulation.projectedDate
+        ? `Projected cash on ${simulation.projectedDate}`
+        : "Projected cash on purchase date",
+      value: formatSignedCurrency(projected),
+      context:
+        projected < 0
+          ? "Projected account balance is below $0 on purchase date."
+          : "Projected account balance stays above $0 on purchase date.",
+      colorClass: projected < 0 ? "text-ws-red" : "text-ws-charcoal",
     };
   }
 
   if (intent.intentType === "big_goal") {
     return {
-      label: "Safe budget now",
+      label: "Safe budget today",
       value: formatCurrency(simulation.maxSafeOneTimeSpend ?? 0),
-      context: `${simulation.targetBufferMonths} month rule`,
-      colorClass: "text-ws-charcoal",
+      context: `Minimum safety cushion: ${simulation.targetBufferMonths} months`,
+      colorClass: (simulation.maxSafeOneTimeSpend ?? 0) > 0 ? "text-ws-charcoal" : "text-ws-red",
     };
   }
 
@@ -991,86 +1034,69 @@ function buildPrimaryMetric(
     return {
       label: "Monthly drag",
       value: `-${formatCurrency(Math.abs(simulation.recurringImpactMonthly ?? 0))}`,
-      context: "new recurring burn",
-      colorClass:
-        simulation.verdict === "risky" ? "text-ws-red" : "text-ws-yellow",
+      context: "Added monthly cost from this recurring expense.",
+      colorClass: simulation.verdict === "risky" ? "text-ws-red" : "text-ws-yellow",
     };
   }
 
+  const dipsBelowZero = simulation.freeCashAfter < 0;
   return {
-    label: "Free cash until payday",
-    value: formatSignedCurrency(simulation.freeCashAfter),
-    context: `${simulation.daysUntilPay} days to payday`,
-    colorClass:
-      simulation.freeCashAfter < 0
-        ? "text-ws-red"
-        : simulation.freeCashAfter < snapshot.dailyBurnRate * 3
-          ? "text-ws-yellow"
-          : "text-ws-green",
+    label: "Will your account dip below $0 before your next paycheck?",
+    value: dipsBelowZero ? "Yes" : "No",
+    context: dipsBelowZero
+      ? "Account goes negative before your next paycheck."
+      : "Account stays above $0 before your next paycheck.",
+    colorClass: dipsBelowZero ? "text-ws-red" : "text-ws-green",
   };
 }
 
-function buildConsequenceMetric(
+function buildSecondaryMetric(
   intent: DecisionIntent,
   simulation: DecisionSimulationV2
 ): MetricTileData {
   if (intent.intentType === "big_goal") {
-    return {
-      label: "Gap to safe budget",
-      value: formatCurrency(simulation.gapToSafeBudget ?? 0),
-      context:
-        simulation.monthsToGoal && simulation.monthlySavingsNeeded
-          ? `${formatCurrency(simulation.monthlySavingsNeeded)}/mo for ${simulation.monthsToGoal} months`
-          : "no immediate safe path",
-      colorClass:
-        (simulation.gapToSafeBudget ?? 0) > 0 ? "text-ws-red" : "text-ws-green",
-    };
-  }
-
-  if (intent.intentType === "planned_purchase") {
-    if (simulation.bestSafeDate) {
+    if (simulation.monthsToGoal && simulation.monthlySavingsNeeded) {
       return {
-        label: "Earliest safe date",
-        value: simulation.bestSafeDate,
-        context: "first modeled date inside guardrails",
-        colorClass: "text-ws-yellow",
+        label: "Safe plan",
+        value: `${formatCurrency(simulation.monthlySavingsNeeded)}/month for ${simulation.monthsToGoal} months`,
+        context: `To safely afford ${formatCurrency(intent.amount)} while keeping a minimum safety cushion of ${simulation.targetBufferMonths} months.`,
+        colorClass: "text-ws-charcoal",
       };
     }
 
     return {
-      label: "Safe price at date",
-      value: formatCurrency(simulation.safePriceAtPurchase ?? 0),
-      context: `vs ${formatCurrency(intent.amount)} target`,
-      colorClass:
-        (simulation.safePriceAtPurchase ?? 0) >= intent.amount
-          ? "text-ws-green"
-          : "text-ws-red",
+      label: "Safe plan",
+      value: "No safe monthly path yet",
+      context: "Current monthly surplus cannot support this goal safely.",
+      colorClass: "text-ws-red",
     };
   }
 
   if (intent.intentType === "recurring") {
+    const nextSurplus = simulation.newPotentialSurplus ?? 0;
     return {
-      label: "Modeled recurring cap",
-      value: formatCurrency(simulation.maxSafeRecurringMonthly ?? 0),
-      context: "monthly amount to stay within rules",
-      colorClass:
-        (simulation.maxSafeRecurringMonthly ?? 0) <= 0
-          ? "text-ws-red"
-          : "text-ws-charcoal",
+      label: "New monthly surplus",
+      value: formatSignedCurrency(nextSurplus),
+      context:
+        nextSurplus < 0
+          ? "This turns your monthly surplus negative."
+          : "Monthly surplus stays positive after this recurring cost.",
+      colorClass: nextSurplus < 0 ? "text-ws-red" : "text-ws-green",
     };
   }
 
   return {
-    label: "Safe spend now",
-    value: formatCurrency(simulation.maxSafeOneTimeSpend ?? 0),
-    context: `at ${simulation.targetBufferMonths}-month buffer`,
+    label: "Emergency cushion",
+    value: `${simulation.bufferMonthsAfter.toFixed(1)} months`,
+    context: `You could cover ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials if income stopped. Minimum safety cushion: ${simulation.targetBufferMonths} months.`,
     colorClass:
-      simulation.maxSafeOneTimeSpend && simulation.maxSafeOneTimeSpend > 0
-        ? "text-ws-charcoal"
-        : "text-ws-red",
+      simulation.bufferMonthsAfter >= simulation.targetBufferMonths
+        ? "text-ws-green"
+        : simulation.bufferMonthsAfter >= 1
+          ? "text-ws-yellow"
+          : "text-ws-red",
   };
 }
-
 function buildAssumptions(
   parsed: ParsedDecisionIntentV2,
   intent: DecisionIntent,

@@ -19,13 +19,12 @@ interface SpendInvestBreakdownProps {
   onAiTermsAcceptedChange: (value: boolean) => void;
 }
 
-const SPEND = 14310;
 const INVEST = 1590;
 
 type ModalTrigger = "enable_button" | "view_button" | "toggle";
 
 export function SpendInvestBreakdown({
-  spending: _spending,
+  spending,
   investing: _investing,
   isAiOptInReady,
   isAiOptedIn,
@@ -33,12 +32,13 @@ export function SpendInvestBreakdown({
   onAiOptInChange,
   onAiTermsAcceptedChange,
 }: SpendInvestBreakdownProps) {
-  const total = SPEND + INVEST;
-  const spendPct = Math.round((SPEND / total) * 100);
-  const investPct = Math.round((INVEST / total) * 100);
+  const cash = spending;
+  const total = cash + INVEST;
+  const cashPct = total > 0 ? Math.round((cash / total) * 100) : 0;
+  const investPct = total > 0 ? Math.round((INVEST / total) * 100) : 0;
 
   const data = [
-    { name: "Spending", value: SPEND },
+    { name: "Cash", value: cash },
     { name: "Investing", value: INVEST },
   ];
 
@@ -111,7 +111,7 @@ export function SpendInvestBreakdown({
     <>
       <div className="bg-ws-white rounded-[8px] border border-ws-border p-6">
         <p className="text-sm font-bold text-ws-grey uppercase tracking-wide mb-4">
-          Spend vs. Invest
+          Cash vs. Invest
         </p>
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="flex items-center gap-6">
@@ -141,9 +141,9 @@ export function SpendInvestBreakdown({
                   style={{ backgroundColor: CHART_COLORS.spending }}
                 />
                 <div>
-                  <p className="text-xs text-ws-grey">Spending</p>
+                  <p className="text-xs text-ws-grey">Cash</p>
                   <p className="text-sm font-bold text-ws-charcoal whitespace-nowrap">
-                    {formatCurrency(SPEND)} ({spendPct}%)
+                    {formatCurrency(cash)} ({cashPct}%)
                   </p>
                 </div>
               </div>

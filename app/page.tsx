@@ -3,6 +3,7 @@ import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
 import { buildCashflowSnapshot } from "@/lib/domain/cashflow-model";
+import { computeStartingBalanceForTargetEnd } from "@/lib/domain/cash-balance";
 import { Header } from "@/components/Header";
 import { BalanceCard } from "@/components/BalanceCard";
 import { DashboardAiStack } from "@/components/DashboardAiStack";
@@ -10,6 +11,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { TransactionList } from "@/components/TransactionList";
 
 const RECENT_TXN_LIMIT = 20;
+const TARGET_END_CASH_BALANCE = 14310;
 
 export default function DashboardPage() {
   const profile = userProfile as UserProfile;
@@ -21,6 +23,20 @@ export default function DashboardPage() {
     amount: 2076,
   });
 
+  const cashBacksolve = computeStartingBalanceForTargetEnd(
+    txns,
+    TARGET_END_CASH_BALANCE
+  );
+
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[cash-backsolve]", {
+      targetEndCashBalance: cashBacksolve.targetEndCashBalance,
+      netCashflow: cashBacksolve.netCashflow,
+      computedStartingBalance: cashBacksolve.computedStartingBalance,
+      lastTransactionDate: cashBacksolve.lastTransactionDate,
+    });
+  }
+
   // Total balance across all accounts
   const totalBalance =
     profile.accounts.chequing_balance +
@@ -28,14 +44,7 @@ export default function DashboardPage() {
     profile.accounts.tfsa_balance +
     profile.accounts.rrsp_balance;
 
-  // Latest month in the dataset for spending calculation
-  const latestDate = txns[txns.length - 1]?.date ?? "";
-  const latestMonth = latestDate.slice(0, 7); // "2025-12"
-
-  const currentMonth = txns.filter((t) => t.date.startsWith(latestMonth));
-  const monthlySpending = currentMonth
-    .filter((t) => t.type === "debit")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const cashBalanceForCard = cashBacksolve.endingCashBalance;
 
   // Investing = TFSA + RRSP balances as a proxy
   const monthlyInvesting = profile.accounts.tfsa_balance;
@@ -56,7 +65,7 @@ export default function DashboardPage() {
       <Header userName={firstName} />
       <BalanceCard balance={totalBalance} />
       <DashboardAiStack
-        spending={monthlySpending}
+        spending={cashBalanceForCard}
         investing={monthlyInvesting}
         habitCount={analysis.habitCandidates.length}
         monthlySavings={
