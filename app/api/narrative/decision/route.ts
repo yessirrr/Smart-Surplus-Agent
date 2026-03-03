@@ -1,9 +1,9 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
   generateDecisionExplanationWithSource,
   type DecisionExplanationInput,
   type DecisionExplanationInputV2,
-} from "@/lib/agent/skills/decision-explanation";
+} from "@/lib/narrative/skills/decision-explanation";
 
 function isV2Input(body: DecisionExplanationInput): body is DecisionExplanationInputV2 {
   return (body as DecisionExplanationInputV2).version === "v2";
@@ -64,3 +64,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

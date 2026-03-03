@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   buildParseFallbackResponse,
   parseDecisionIntentV2WithSource,
-} from "@/lib/agent/skills/decision-intent-v2";
+} from "@/lib/narrative/skills/decision-intent-v2";
 
 export async function POST(request: Request) {
   let input = "";
@@ -44,3 +44,4 @@ export async function POST(request: Request) {
     });
   }
 }
+

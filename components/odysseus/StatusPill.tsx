@@ -3,7 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
-interface AIPillProps {
+interface StatusPillProps {
   label: string;
   size?: "sm" | "md";
   className?: string;
@@ -13,12 +13,12 @@ interface AIPillProps {
 const BASE_BORDER_GRADIENT =
   "linear-gradient(90deg, #4285F4, #9B72CB, #D96570, #FBBC04)";
 
-export function AIPill({
+export function StatusPill({
   label,
   size = "md",
   className,
   interactive = false,
-}: AIPillProps) {
+}: StatusPillProps) {
   const prefersReducedMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
   const renderedLabel = label.toUpperCase();
@@ -71,3 +71,4 @@ export function AIPill({
     </motion.span>
   );
 }
+

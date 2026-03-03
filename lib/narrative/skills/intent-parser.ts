@@ -1,4 +1,4 @@
-import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 
 export type SpendCadence = "one_time" | "weekly" | "monthly";
 export type TimeHorizon = "today" | "this_week" | "this_month";
@@ -12,7 +12,7 @@ export interface DecisionIntent {
   clarificationQuestion: string | null;
 }
 
-const SYSTEM_PROMPT = `You are a financial intent parser. The user is describing a potential purchase or recurring expense. Extract structured fields from their natural language input.
+const SYSTEM_GUIDELINES = `You are a financial intent parser. The user is describing a potential purchase or recurring expense. Extract structured fields from their natural language input.
 
 Rules:
 - Extract the dollar amount if mentioned. Remove currency symbols and parse to a number.
@@ -137,16 +137,16 @@ function fallbackParse(input: string): DecisionIntent {
 export async function parseDecisionIntent(
   input: string
 ): Promise<DecisionIntent> {
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     return fallbackParse(input);
   }
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 200,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_GUIDELINES },
         { role: "user", content: input },
       ],
       response_format: {
@@ -180,3 +180,7 @@ export async function parseDecisionIntent(
     return fallbackParse(input);
   }
 }
+
+
+
+

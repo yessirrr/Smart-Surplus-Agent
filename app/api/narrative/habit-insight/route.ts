@@ -1,8 +1,8 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import transactions from "@/data/transactions.json";
 import type { Transaction } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
-import { generateHabitInsight } from "@/lib/agent/skills/habit-insight";
+import { generateHabitInsight } from "@/lib/narrative/skills/habit-insight";
 import { buildRecurringHabit } from "@/lib/utils/build-recurring-habit";
 
 export async function POST(request: Request) {
@@ -62,3 +62,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

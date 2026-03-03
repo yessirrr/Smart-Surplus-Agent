@@ -72,7 +72,7 @@
   animation: pulse-green 2s ease-in-out infinite;
 }
 
-@keyframes ai-pill-border-spin {
+@keyframes status-pill-border-spin {
   from {
     transform: rotate(0deg);
   }
@@ -82,7 +82,7 @@
   }
 }
 
-.ai-pill-border {
+.status-pill-border {
   background: conic-gradient(
     from 0deg,
     rgba(50, 48, 47, 0.24),
@@ -90,12 +90,12 @@
     rgba(50, 48, 47, 0.18),
     rgba(50, 48, 47, 0.24)
   );
-  animation: ai-pill-border-spin 8s linear infinite;
+  animation: status-pill-border-spin 8s linear infinite;
   transform-origin: center;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ai-pill-border {
+  .status-pill-border {
     animation: none;
   }
 }
@@ -111,3 +111,4 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+

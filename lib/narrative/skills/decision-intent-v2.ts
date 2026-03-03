@@ -5,7 +5,7 @@ import {
   type SpendCadence,
   type TimeHorizon,
 } from "@/lib/domain/decision-intent";
-import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 
 export type ClarificationField =
   | "amount"
@@ -28,7 +28,7 @@ export interface ParsedDecisionIntentV2 {
 }
 
 
-export type ParseSource = "openai" | "fallback";
+export type ParseSource = "modelClient" | "fallback";
 
 interface RawParsedIntentV2 {
   intentType: string;
@@ -48,7 +48,7 @@ interface RawParsedIntentV2 {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY_RE = /\$\s*([\d,]+(?:\.\d{1,2})?)|(\b\d{2,}(?:,\d{3})*(?:\.\d{1,2})?\b)/;
 
-const SYSTEM_PROMPT = `You are an intent parser for a personal finance assistant.
+const SYSTEM_GUIDELINES = `You are an intent parser for a personal finance assistant.
 
 Task:
 Convert natural language spending text into structured JSON for deterministic simulation.
@@ -521,16 +521,16 @@ export async function parseDecisionIntentV2WithSource(
 ): Promise<{ parsed: ParsedDecisionIntentV2; source: ParseSource }> {
   const baseline = fallbackParse(input);
 
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     return { parsed: baseline, source: "fallback" };
   }
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 240,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_GUIDELINES },
         { role: "user", content: input },
       ],
       response_format: {
@@ -547,7 +547,7 @@ export async function parseDecisionIntentV2WithSource(
     const raw = JSON.parse(content) as RawParsedIntentV2;
     return {
       parsed: normalizeParsedIntent(raw, baseline),
-      source: "openai",
+      source: "modelClient",
     };
   } catch {
     return { parsed: baseline, source: "fallback" };
@@ -562,4 +562,8 @@ export async function parseDecisionIntentV2(input: string): Promise<ParsedDecisi
 export function buildParseFallbackResponse(input: string): ParsedDecisionIntentV2 {
   return fallbackParse(input);
 }
+
+
+
+
 

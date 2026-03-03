@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Transaction, HabitCandidate } from "@/lib/types";
-import type { HabitInsightResult } from "@/lib/agent/skills/habit-insight";
+import type { HabitInsightResult } from "@/lib/narrative/skills/habit-insight";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StockLogoWithPopover } from "@/components/market/StockLogoWithPopover";
 
@@ -276,5 +276,6 @@ function InsightSkeleton() {
     </div>
   );
 }
+
 
 

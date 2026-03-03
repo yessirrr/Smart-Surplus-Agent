@@ -7,8 +7,8 @@ import { motion, AnimatePresence } from "motion/react";
 import transactions from "@/data/transactions.json";
 import type { Transaction } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
-import { useAgent } from "@/lib/agent/use-agent";
-import type { CommitmentSummaryResult } from "@/lib/agent/skills/commitment-summary";
+import { useRequest } from "@/lib/narrative/use-request";
+import type { CommitmentSummaryResult } from "@/lib/narrative/skills/commitment-summary";
 
 // ---------------------------------------------------------------------------
 // Constants & baseline computation from real data
@@ -677,12 +677,12 @@ export default function PlanPage() {
   const totalBeats = BEATS.length;
   const atEnd = currentBeat >= totalBeats - 1;
 
-  // AI summary
+  // Narrative summary
   const {
     data: summary,
     loading: summaryLoading,
     generate: fetchSummary,
-  } = useAgent<CommitmentSummaryResult>("/api/agent/commitment-summary");
+  } = useRequest<CommitmentSummaryResult>("/api/narrative/commitment-summary");
   const summaryFetchedRef = useRef(false);
 
   useEffect(() => {
@@ -864,7 +864,7 @@ export default function PlanPage() {
             </motion.p>
           )}
 
-          {/* AI Summary */}
+          {/* Summary */}
           {atEnd && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -908,3 +908,6 @@ export default function PlanPage() {
     </div>
   );
 }
+
+
+

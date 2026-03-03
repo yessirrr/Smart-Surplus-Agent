@@ -1,14 +1,14 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
-import { getAiOptIn, getAiTermsAccepted } from "@/lib/client/aiOptIn";
+import { getOdysseusOptIn, getOdysseusTermsAccepted } from "@/lib/client/odysseusOptIn";
 import type { CashflowSnapshot } from "@/lib/domain/cashflow-model";
 import type { PaySchedule, Transaction } from "@/lib/types";
 import { SpendInvestBreakdown } from "@/components/SpendInvestBreakdown";
-import { AgentInsightCard } from "@/components/AgentInsightCard";
+import { InsightCard } from "@/components/InsightCard";
 import { DecisionMode } from "@/components/DecisionMode";
 
-interface DashboardAiStackProps {
+interface DashboardStackProps {
   spending: number;
   investing: number;
   habitCount: number;
@@ -18,7 +18,7 @@ interface DashboardAiStackProps {
   paySchedule: PaySchedule;
 }
 
-export function DashboardAiStack({
+export function DashboardStack({
   spending,
   investing,
   habitCount,
@@ -26,15 +26,15 @@ export function DashboardAiStack({
   snapshot,
   transactions,
   paySchedule,
-}: DashboardAiStackProps) {
-  const [isAiOptInReady, setIsAiOptInReady] = useState(false);
-  const [isAiOptedIn, setIsAiOptedIn] = useState(false);
-  const [isAiTermsAccepted, setIsAiTermsAccepted] = useState(false);
+}: DashboardStackProps) {
+  const [isOdysseusReady, setIsOdysseusReady] = useState(false);
+  const [isOdysseusEnabled, setIsOdysseusEnabled] = useState(false);
+  const [isOdysseusTermsAccepted, setIsOdysseusTermsAccepted] = useState(false);
 
   useEffect(() => {
-    setIsAiOptedIn(getAiOptIn());
-    setIsAiTermsAccepted(getAiTermsAccepted());
-    setIsAiOptInReady(true);
+    setIsOdysseusEnabled(getOdysseusOptIn());
+    setIsOdysseusTermsAccepted(getOdysseusTermsAccepted());
+    setIsOdysseusReady(true);
   }, []);
 
   return (
@@ -42,23 +42,28 @@ export function DashboardAiStack({
       <SpendInvestBreakdown
         spending={spending}
         investing={investing}
-        isAiOptInReady={isAiOptInReady}
-        isAiOptedIn={isAiOptedIn}
-        isAiTermsAccepted={isAiTermsAccepted}
-        onAiOptInChange={setIsAiOptedIn}
-        onAiTermsAcceptedChange={setIsAiTermsAccepted}
+        isOdysseusReady={isOdysseusReady}
+        isOdysseusEnabled={isOdysseusEnabled}
+        isOdysseusTermsAccepted={isOdysseusTermsAccepted}
+        onOdysseusEnabledChange={setIsOdysseusEnabled}
+        onOdysseusTermsAcceptedChange={setIsOdysseusTermsAccepted}
       />
-      {isAiOptInReady && isAiOptedIn ? (
-        <AgentInsightCard
+      {isOdysseusReady && isOdysseusEnabled ? (
+        <InsightCard
           habitCount={habitCount}
           monthlySavings={monthlySavings}
         />
       ) : null}
-      <DecisionMode
-        snapshot={snapshot}
-        transactions={transactions}
-        paySchedule={paySchedule}
-      />
+      {isOdysseusReady && isOdysseusEnabled ? (
+        <DecisionMode
+          snapshot={snapshot}
+          transactions={transactions}
+          paySchedule={paySchedule}
+        />
+      ) : null}
     </div>
   );
 }
+
+
+

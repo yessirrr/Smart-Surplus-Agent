@@ -14,7 +14,7 @@ const TERMS_TRANSITION = {
   ease: [0, 0.71, 0.2, 1.01] as const,
 };
 
-interface AITermsModalProps {
+interface TermsModalProps {
   open: boolean;
   mode: "enable" | "view";
   onClose: () => void;
@@ -22,13 +22,13 @@ interface AITermsModalProps {
   triggerRef?: RefObject<HTMLElement | null>;
 }
 
-export function AITermsModal({
+export function TermsModal({
   open,
   mode,
   onClose,
   onEnable,
   triggerRef,
-}: AITermsModalProps) {
+}: TermsModalProps) {
   const prefersReducedMotion = useReducedMotion();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousOverflowRef = useRef("");
@@ -141,7 +141,7 @@ export function AITermsModal({
               ref={dialogRef}
               role="dialog"
               aria-modal="true"
-              aria-labelledby="odysseus-ai-terms-title"
+              aria-labelledby="odysseus-terms-title"
               tabIndex={-1}
               className="w-full max-w-[640px] max-h-[85vh] overflow-y-auto rounded-[14px] border border-ws-border bg-ws-white p-6 shadow-[0_22px_50px_rgba(0,0,0,0.24)]"
               initial={panelInitial}
@@ -152,10 +152,10 @@ export function AITermsModal({
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p
-                    id="odysseus-ai-terms-title"
+                    id="odysseus-terms-title"
                     className="text-sm font-semibold text-ws-charcoal tracking-[0.02em]"
                   >
-                    Odysseus AI Terms
+                    Odysseus Terms
                   </p>
                 </div>
                 <button
@@ -263,3 +263,4 @@ export function AITermsModal({
     </AnimatePresence>
   );
 }
+

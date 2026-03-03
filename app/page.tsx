@@ -1,4 +1,4 @@
-﻿import transactions from "@/data/transactions.json";
+import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
@@ -6,7 +6,7 @@ import { buildCashflowSnapshot } from "@/lib/domain/cashflow-model";
 import { computeStartingBalanceForTargetEnd } from "@/lib/domain/cash-balance";
 import { Header } from "@/components/Header";
 import { BalanceCard } from "@/components/BalanceCard";
-import { DashboardAiStack } from "@/components/DashboardAiStack";
+import { DashboardStack } from "@/components/DashboardStack";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TransactionList } from "@/components/TransactionList";
 
@@ -29,15 +29,6 @@ export default function DashboardPage() {
     txns,
     TARGET_END_CASH_BALANCE
   );
-
-  if (process.env.NODE_ENV !== "production") {
-    console.debug("[cash-backsolve]", {
-      targetEndCashBalance: cashBacksolve.targetEndCashBalance,
-      netCashflow: cashBacksolve.netCashflow,
-      computedStartingBalance: cashBacksolve.computedStartingBalance,
-      lastTransactionDate: cashBacksolve.lastTransactionDate,
-    });
-  }
 
   // Total balance across all accounts
   const totalBalance =
@@ -71,7 +62,7 @@ export default function DashboardPage() {
     <div className="pb-12">
       <Header userName={firstName} />
       <BalanceCard balance={totalBalance} />
-      <DashboardAiStack
+      <DashboardStack
         spending={cashBalanceForCard}
         investing={monthlyInvesting}
         habitCount={analysis.habitCandidates.length}
@@ -88,5 +79,7 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
 
 

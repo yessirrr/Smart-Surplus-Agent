@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateCommitmentSummary } from "@/lib/agent/skills/commitment-summary";
-import type { CommitmentSummaryInput } from "@/lib/agent/skills/commitment-summary";
+import { generateCommitmentSummary } from "@/lib/narrative/skills/commitment-summary";
+import type { CommitmentSummaryInput } from "@/lib/narrative/skills/commitment-summary";
 
 export async function POST(request: Request) {
   try {
@@ -26,3 +26,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

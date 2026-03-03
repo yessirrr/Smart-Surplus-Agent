@@ -29,4 +29,5 @@ export type {
 } from "./skills/decision-intent-v2";
 
 // Client hook
-export { useAgent } from "./use-agent";
+export { useRequest } from "./use-request";
+

@@ -1,7 +1,7 @@
 import type { DecisionSimulationV2 } from "@/lib/domain/decision-simulator";
 import type { IntentType, SpendCadence, TimeHorizon } from "@/lib/domain/decision-intent";
 import type { PolicyDecision, SpendingForecast } from "@/lib/types";
-import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 
 export interface DecisionExplanationResult {
   headline: string;
@@ -11,7 +11,7 @@ export interface DecisionExplanationResult {
   assumptions: string[];
 }
 
-export type ExplanationSource = "openai" | "fallback";
+export type ExplanationSource = "modelClient" | "fallback";
 
 export interface DecisionExplanationInputLegacy {
   proposedAmount: number;
@@ -91,7 +91,7 @@ export type DecisionExplanationInput =
   | DecisionExplanationInputLegacy
   | DecisionExplanationInputV2;
 
-const SYSTEM_PROMPT = `You are Odysseus, a personal finance assistant.
+const SYSTEM_GUIDELINES = `You are Odysseus, a personal finance assistant.
 
 You receive deterministic simulation results and factual numbers.
 Your role is to explain the result, not compute it.
@@ -334,7 +334,7 @@ function getFallback(input: DecisionExplanationInput): DecisionExplanationResult
 export async function generateDecisionExplanationWithSource(
   input: DecisionExplanationInput
 ): Promise<{ result: DecisionExplanationResult; source: ExplanationSource }> {
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     return {
       result: getFallback(input),
       source: "fallback",
@@ -342,11 +342,11 @@ export async function generateDecisionExplanationWithSource(
   }
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 260,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_GUIDELINES },
         { role: "user", content: JSON.stringify(input) },
       ],
       response_format: {
@@ -365,7 +365,7 @@ export async function generateDecisionExplanationWithSource(
 
     return {
       result: JSON.parse(content) as DecisionExplanationResult,
-      source: "openai",
+      source: "modelClient",
     };
   } catch {
     return {
@@ -381,5 +381,9 @@ export async function generateDecisionExplanation(
   const { result } = await generateDecisionExplanationWithSource(input);
   return result;
 }
+
+
+
+
 
 

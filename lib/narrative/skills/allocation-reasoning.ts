@@ -1,4 +1,4 @@
-import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 
 export interface AllocationReasoningInput {
   riskTolerance: string;
@@ -17,7 +17,7 @@ export interface AllocationReasoningResult {
   caveat: string;
 }
 
-const SYSTEM_PROMPT = `You are Odysseus, a personal finance AI assistant. You explain investment allocation choices in plain language. You help users understand risk and return tradeoffs without being prescriptive.
+const SYSTEM_GUIDELINES = `You are Odysseus, a personal finance assistant. You explain investment allocation choices in plain language. You help users understand risk and return tradeoffs without being prescriptive.
 
 Rules:
 - Never recommend specific securities, funds, or tickers.
@@ -79,7 +79,7 @@ const FALLBACKS: Record<string, AllocationReasoningResult> = {
 export async function generateAllocationReasoning(
   input: AllocationReasoningInput
 ): Promise<AllocationReasoningResult> {
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     return FALLBACKS[input.planName] ?? FALLBACKS["Balanced"];
   }
 
@@ -96,11 +96,11 @@ export async function generateAllocationReasoning(
       monthlySavingsAmount: Math.round(input.monthlySavings),
     });
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 300,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_GUIDELINES },
         { role: "user", content: userMessage },
       ],
       response_format: {
@@ -117,3 +117,7 @@ export async function generateAllocationReasoning(
     return FALLBACKS[input.planName] ?? FALLBACKS["Balanced"];
   }
 }
+
+
+
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -11,8 +11,6 @@ import {
 } from "recharts";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
-import { useAgent } from "@/lib/agent/use-agent";
-import type { AllocationReasoningResult } from "@/lib/agent/skills/allocation-reasoning";
 
 type PlanId = "conservative" | "balanced" | "growth";
 
@@ -79,28 +77,7 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
   const [check1, setCheck1] = useState(false);
   const [check2, setCheck2] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-
-  const {
-    data: reasoning,
-    loading: reasoningLoading,
-    generate: fetchReasoning,
-  } = useAgent<AllocationReasoningResult>("/api/agent/allocation-reasoning");
-
   const plan = PLANS.find((p) => p.id === selectedPlan)!;
-
-  useEffect(() => {
-    fetchReasoning({
-      riskTolerance: "medium",
-      horizon: "long",
-      planName: plan.name,
-      bondsPct: plan.bondsPct,
-      equityPct: plan.equityPct,
-      expectedReturn: plan.rate,
-      monthlySavings,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlan]);
-
   const fv1 = futureValue(monthlySavings, plan.rate, 1);
   const fv5 = futureValue(monthlySavings, plan.rate, 5);
   const fv10 = futureValue(monthlySavings, plan.rate, 10);
@@ -289,36 +266,6 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
         </div>
       </div>
 
-      {/* Why this plan? */}
-      <div className="mt-4 bg-ws-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-sm">&#10024;</span>
-          <p className="text-[10px] text-ws-grey uppercase tracking-wide font-medium">
-            Why this plan?
-          </p>
-        </div>
-        {reasoningLoading && <ReasoningSkeleton />}
-        {!reasoningLoading && reasoning && (
-          <>
-            <p className="text-sm text-ws-charcoal leading-relaxed">
-              {reasoning.reasoning}
-            </p>
-            <p className="text-xs text-ws-charcoal mt-2 leading-relaxed">
-              {reasoning.riskExplanation}
-            </p>
-            <p className="text-xs text-ws-charcoal mt-2 leading-relaxed">
-              {reasoning.historicalContext}
-            </p>
-            <p className="text-[10px] text-ws-grey mt-3 italic leading-relaxed">
-              {reasoning.caveat}
-            </p>
-          </>
-        )}
-        {!reasoningLoading && !reasoning && (
-          <p className="text-xs text-ws-grey">Reasoning unavailable</p>
-        )}
-      </div>
-
       {/* CTA / Confirmation */}
       {!showConfirm ? (
         <button
@@ -386,17 +333,6 @@ export function AllocationPicker({ monthlySavings }: AllocationPickerProps) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function ReasoningSkeleton() {
-  return (
-    <div className="animate-pulse">
-      <div className="w-full h-3 bg-ws-light-grey rounded" />
-      <div className="w-5/6 h-3 bg-ws-light-grey rounded mt-2" />
-      <div className="w-full h-3 bg-ws-light-grey rounded mt-2" />
-      <div className="w-3/4 h-3 bg-ws-light-grey rounded mt-2" />
     </div>
   );
 }

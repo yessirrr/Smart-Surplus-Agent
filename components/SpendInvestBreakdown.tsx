@@ -3,20 +3,20 @@
 import { useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
-import { AIPill } from "@/components/ai/AIPill";
-import { AITermsModal } from "@/components/ai/AITermsModal";
-import { setAiOptIn, setAiTermsAccepted } from "@/lib/client/aiOptIn";
+import { StatusPill } from "@/components/odysseus/StatusPill";
+import { TermsModal } from "@/components/odysseus/TermsModal";
+import { setOdysseusOptIn, setOdysseusTermsAccepted } from "@/lib/client/odysseusOptIn";
 import { formatCurrency } from "@/lib/utils";
 import { CHART_COLORS } from "@/lib/constants";
 
 interface SpendInvestBreakdownProps {
   spending: number;
   investing: number;
-  isAiOptInReady: boolean;
-  isAiOptedIn: boolean;
-  isAiTermsAccepted: boolean;
-  onAiOptInChange: (value: boolean) => void;
-  onAiTermsAcceptedChange: (value: boolean) => void;
+  isOdysseusReady: boolean;
+  isOdysseusEnabled: boolean;
+  isOdysseusTermsAccepted: boolean;
+  onOdysseusEnabledChange: (value: boolean) => void;
+  onOdysseusTermsAcceptedChange: (value: boolean) => void;
 }
 
 const INVEST = 1590;
@@ -26,11 +26,11 @@ type ModalTrigger = "enable_button" | "view_button" | "toggle";
 export function SpendInvestBreakdown({
   spending,
   investing: _investing,
-  isAiOptInReady,
-  isAiOptedIn,
-  isAiTermsAccepted,
-  onAiOptInChange,
-  onAiTermsAcceptedChange,
+  isOdysseusReady,
+  isOdysseusEnabled,
+  isOdysseusTermsAccepted,
+  onOdysseusEnabledChange,
+  onOdysseusTermsAcceptedChange,
 }: SpendInvestBreakdownProps) {
   const cash = spending;
   const total = cash + INVEST;
@@ -74,17 +74,17 @@ export function SpendInvestBreakdown({
   }
 
   function handleEnableOdysseus() {
-    setAiTermsAccepted(true);
-    onAiTermsAcceptedChange(true);
-    setAiOptIn(true);
-    onAiOptInChange(true);
+    setOdysseusTermsAccepted(true);
+    onOdysseusTermsAcceptedChange(true);
+    setOdysseusOptIn(true);
+    onOdysseusEnabledChange(true);
     setPendingEnable(false);
   }
 
-  function handleToggleAi() {
-    if (isAiOptedIn) {
-      setAiOptIn(false);
-      onAiOptInChange(false);
+  function handleToggleOdysseus() {
+    if (isOdysseusEnabled) {
+      setOdysseusOptIn(false);
+      onOdysseusEnabledChange(false);
       setPendingEnable(false);
       setIsTermsOpen(false);
       return;
@@ -160,20 +160,20 @@ export function SpendInvestBreakdown({
           </div>
 
           <div className="w-full md:max-w-[240px]">
-            {!isAiOptInReady ? (
+            {!isOdysseusReady ? (
               <div className="min-h-[132px] rounded-[8px] border border-ws-border bg-ws-off-white/50" />
             ) : (
               <div className="rounded-[8px] border border-ws-border bg-ws-off-white/60 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <AIPill label="Odysseus" size="sm" />
+                      <StatusPill label="Odysseus" size="sm" />
                       <p
                         className={`text-xs font-bold uppercase tracking-wide ${
-                          isAiOptedIn ? "text-ws-green" : "text-ws-grey"
+                          isOdysseusEnabled ? "text-ws-green" : "text-ws-grey"
                         }`}
                       >
-                        {isAiOptedIn ? "Active" : "Inactive"}
+                        {isOdysseusEnabled ? "Active" : "Inactive"}
                       </p>
                     </div>
                   </div>
@@ -181,22 +181,22 @@ export function SpendInvestBreakdown({
                   <button
                     ref={toggleTriggerRef}
                     type="button"
-                    onClick={handleToggleAi}
-                    aria-pressed={isAiOptedIn}
-                    aria-label={isAiOptedIn ? "Disable Odysseus AI" : "Enable Odysseus AI"}
+                    onClick={handleToggleOdysseus}
+                    aria-pressed={isOdysseusEnabled}
+                    aria-label={isOdysseusEnabled ? "Disable Odysseus" : "Enable Odysseus"}
                     className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                      isAiOptedIn ? "bg-ws-charcoal" : "bg-ws-border"
+                      isOdysseusEnabled ? "bg-ws-charcoal" : "bg-ws-border"
                     }`}
                   >
                     <motion.span
                       className="absolute h-5 w-5 rounded-full bg-ws-white shadow-[0_1px_3px_rgba(0,0,0,0.25)]"
-                      animate={{ x: isAiOptedIn ? 22 : 2 }}
+                      animate={{ x: isOdysseusEnabled ? 22 : 2 }}
                       transition={toggleTransition}
                     />
                   </button>
                 </div>
 
-                {!isAiOptedIn && !isAiTermsAccepted ? (
+                {!isOdysseusEnabled && !isOdysseusTermsAccepted ? (
                   <button
                     type="button"
                     ref={enableTriggerRef}
@@ -207,7 +207,7 @@ export function SpendInvestBreakdown({
                   </button>
                 ) : null}
 
-                {isAiTermsAccepted ? (
+                {isOdysseusTermsAccepted ? (
                   <button
                     type="button"
                     ref={viewTriggerRef}
@@ -223,7 +223,7 @@ export function SpendInvestBreakdown({
         </div>
       </div>
 
-      <AITermsModal
+      <TermsModal
         open={isTermsOpen}
         mode={termsMode}
         onClose={closeTerms}
@@ -233,3 +233,5 @@ export function SpendInvestBreakdown({
     </>
   );
 }
+
+

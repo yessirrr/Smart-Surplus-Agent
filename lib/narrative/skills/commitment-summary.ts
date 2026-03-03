@@ -1,4 +1,4 @@
-import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 
 export interface CommitmentSummaryResult {
   reflection: string;
@@ -16,7 +16,7 @@ export interface CommitmentSummaryInput {
   portfolioValue: number;
 }
 
-const SYSTEM_PROMPT = `You are Odysseus, a personal finance AI. You just watched a user's commitment to eliminate vaping play out over several weeks. Summarize what happened with precision and warmth. Be brief — three short fields, each 1-2 sentences maximum. Reference the exact numbers provided. Do not invent data. Do not give investment advice. Frame slips as learning moments, not failures. The tone is: a coach reviewing game tape with an athlete. Direct, specific, encouraging.`;
+const SYSTEM_GUIDELINES = `You are Odysseus, a personal finance advisor. You just watched a user's commitment to eliminate vaping play out over several weeks. Summarize what happened with precision and warmth. Be brief — three short fields, each 1-2 sentences maximum. Reference the exact numbers provided. Do not invent data. Do not give investment advice. Frame slips as learning moments, not failures. The tone is: a coach reviewing game tape with an athlete. Direct, specific, encouraging.`;
 
 const JSON_SCHEMA = {
   name: "commitment_summary",
@@ -46,18 +46,18 @@ function getFallback(input: CommitmentSummaryInput): CommitmentSummaryResult {
 export async function generateCommitmentSummary(
   input: CommitmentSummaryInput
 ): Promise<CommitmentSummaryResult> {
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     return getFallback(input);
   }
 
   try {
     const userMessage = JSON.stringify(input);
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 200,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_GUIDELINES },
         { role: "user", content: userMessage },
       ],
       response_format: {
@@ -74,3 +74,7 @@ export async function generateCommitmentSummary(
     return getFallback(input);
   }
 }
+
+
+
+

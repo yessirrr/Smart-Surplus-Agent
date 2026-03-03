@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 
-export function useAgent<T>(endpoint: string) {
+export function useRequest<T>(endpoint: string) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export function useAgent<T>(endpoint: string) {
           headers: { "Content-Type": "application/json" },
           body: body ? JSON.stringify(body) : undefined,
         });
-        if (!res.ok) throw new Error(`Agent error: ${res.status}`);
+        if (!res.ok) throw new Error(`Request error: ${res.status}`);
         const result = await res.json();
         if (result.error) throw new Error(result.error);
         setData(result);
@@ -32,3 +32,4 @@ export function useAgent<T>(endpoint: string) {
 
   return { data, loading, error, generate };
 }
+

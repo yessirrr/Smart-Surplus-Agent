@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import transactions from "@/data/transactions.json";
 import type { Transaction } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
-import { generateSurplusNarrative } from "@/lib/agent/skills/surplus-narrative";
-import type { SurplusNarrativeInput } from "@/lib/agent/skills/surplus-narrative";
+import { generateSurplusNarrative } from "@/lib/narrative/skills/surplus-narrative";
+import type { SurplusNarrativeInput } from "@/lib/narrative/skills/surplus-narrative";
 
 export async function POST(request: Request) {
   try {
@@ -40,3 +40,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

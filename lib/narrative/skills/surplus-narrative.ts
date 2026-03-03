@@ -1,4 +1,4 @@
-import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 import type { SurplusSummary } from "@/lib/types";
 
 export interface SurplusNarrativeResult {
@@ -15,7 +15,7 @@ export interface SurplusNarrativeInput {
   potentialSurplus?: number;
 }
 
-const BASE_SYSTEM_PROMPT = `You are Odysseus, a personal finance AI assistant. You summarize a user's surplus situation clearly and motivationally. You see the full picture — income, essential costs, discretionary spending, and habit-linked leaks.
+const BASE_SYSTEM_GUIDELINES = `You are Odysseus, a personal finance assistant. You summarize a user's surplus situation clearly and motivationally. You see the full picture — income, essential costs, discretionary spending, and habit-linked leaks.
 
 Rules:
 - Never invent numbers. Only reference the data provided.
@@ -73,7 +73,7 @@ export async function generateSurplusNarrative(
   surplus: SurplusSummary,
   context?: SurplusNarrativeInput
 ): Promise<SurplusNarrativeResult> {
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     if (context?.selectedHabits && context.selectedHabits.length > 0) {
       return getContextFallback(context);
     }
@@ -111,11 +111,11 @@ export async function generateSurplusNarrative(
 
     const userMessage = JSON.stringify(userPayload);
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 400,
       messages: [
-        { role: "system", content: BASE_SYSTEM_PROMPT },
+        { role: "system", content: BASE_SYSTEM_GUIDELINES },
         { role: "user", content: userMessage },
       ],
       response_format: {
@@ -140,3 +140,7 @@ export async function generateSurplusNarrative(
     return FALLBACK;
   }
 }
+
+
+
+

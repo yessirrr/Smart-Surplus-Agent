@@ -8,9 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Surplus Agent | Wealthsimple",
+  title: "Smart Surplus | Wealthsimple",
   description:
-    "AI-powered surplus detection and investment recommendations",
+    "Data-driven surplus detection and investment recommendations",
 };
 
 export default function RootLayout({
@@ -28,3 +28,4 @@ export default function RootLayout({
     </html>
   );
 }
+

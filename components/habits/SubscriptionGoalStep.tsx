@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { Transaction, HabitCandidate } from "@/lib/types";
-import type { GoalInsightResult } from "@/lib/agent/skills/goal-insight";
+import type { GoalInsightResult } from "@/lib/narrative/skills/goal-insight";
 import { formatCurrency } from "@/lib/utils";
 
 interface SubscriptionGoalStepProps {
@@ -264,3 +264,4 @@ function InsightSkeleton() {
     </div>
   );
 }
+

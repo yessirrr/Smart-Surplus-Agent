@@ -71,7 +71,7 @@ export interface UserProfile {
 
 export type HabitIntensity = "gentle" | "standard" | "strict";
 export type Timeframe = { start: string; end?: string };
-export type DecisionSource = "user" | "agent" | "system";
+export type DecisionSource = "user" | "engine" | "system";
 
 export interface HabitGoal {
   id: string;
@@ -230,4 +230,5 @@ export interface SpendingForecast {
   trials: number;
   drivers?: Array<{ category: string; contribution: number }>;
 }
+
 

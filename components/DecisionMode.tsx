@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { formatCurrency } from "@/lib/utils";
-import { useAgent } from "@/lib/agent/use-agent";
+import { useRequest } from "@/lib/narrative/use-request";
 import type { CashflowSnapshot } from "@/lib/domain/cashflow-model";
 import type { DecisionModeRunMetadata, PolicyAction, PaySchedule, Transaction } from "@/lib/types";
 import {
@@ -31,11 +31,11 @@ import {
 import type {
   ClarificationField,
   ParsedDecisionIntentV2,
-} from "@/lib/agent/skills/decision-intent-v2";
+} from "@/lib/narrative/skills/decision-intent-v2";
 import type {
   DecisionExplanationInputV2,
   DecisionExplanationResult,
-} from "@/lib/agent/skills/decision-explanation";
+} from "@/lib/narrative/skills/decision-explanation";
 
 const PLACEHOLDERS = [
   "$80 dinner tonight",
@@ -142,7 +142,7 @@ export function DecisionMode({ snapshot, transactions, paySchedule }: DecisionMo
     data: explanation,
     loading: explanationLoading,
     generate: fetchExplanation,
-  } = useAgent<DecisionExplanationResult>("/api/agent/decision");
+  } = useRequest<DecisionExplanationResult>("/api/narrative/decision");
 
   useEffect(() => {
     if (phase !== "idle" || input.trim().length > 0) {
@@ -158,9 +158,14 @@ export function DecisionMode({ snapshot, transactions, paySchedule }: DecisionMo
 
   const missingFields = parsedIntent?.clarificationFields ?? [];
 
-  const confidenceLabel =
-    explanation?.confidence ??
-    (parsedIntent?.needsClarification ? "low" : simulation ? "medium" : "high");
+  const confidenceLabel: keyof typeof CONFIDENCE_STYLE =
+    explanation?.confidence === "high" || explanation?.confidence === "medium" || explanation?.confidence === "low"
+      ? explanation.confidence
+      : parsedIntent?.needsClarification
+        ? "low"
+        : simulation
+          ? "medium"
+          : "high";
 
   const displayedVerdict = decisionMeta?.policy
     ? mapPolicyActionToVerdict(decisionMeta.policy.action)
@@ -1332,4 +1337,7 @@ function projectPlannedDivergence(
         : "Assumes purchase happens after the 90-day window",
   };
 }
+
+
+
 

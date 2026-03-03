@@ -1,10 +1,24 @@
 import OpenAI from "openai";
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getProviderKey(): string | null {
+  const key = process.env.MODEL_PROVIDER_KEY;
+  if (!key || key === "your-provider-key-here") {
+    return null;
+  }
 
-export function isApiKeyValid(): boolean {
-  const key = process.env.OPENAI_API_KEY;
-  return !!key && key !== "your-key-here" && key.startsWith("sk-");
+  return key;
+}
+
+export function isProviderKeyConfigured(): boolean {
+  const key = getProviderKey();
+  return typeof key === "string" && key.startsWith("sk-");
+}
+
+export function getModelClient(): OpenAI {
+  const key = getProviderKey();
+  if (!key) {
+    throw new Error("Model provider key is not configured.");
+  }
+
+  return new OpenAI({ apiKey: key });
 }

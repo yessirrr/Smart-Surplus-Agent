@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseDecisionIntent } from "@/lib/agent/skills/intent-parser";
+import { parseDecisionIntent } from "@/lib/narrative/skills/intent-parser";
 
 export async function POST(request: Request) {
   try {
@@ -21,3 +21,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

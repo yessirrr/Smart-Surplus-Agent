@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateGoalInsight } from "@/lib/agent/skills/goal-insight";
-import type { GoalInsightInput } from "@/lib/agent/skills/goal-insight";
+import { generateGoalInsight } from "@/lib/narrative/skills/goal-insight";
+import type { GoalInsightInput } from "@/lib/narrative/skills/goal-insight";
 
 export async function POST(request: Request) {
   try {
@@ -22,3 +22,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

@@ -6,9 +6,9 @@ import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile, HabitIntensity } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
-import { useAgent } from "@/lib/agent/use-agent";
-import type { HabitInsightResult } from "@/lib/agent/skills/habit-insight";
-import type { GoalInsightResult } from "@/lib/agent/skills/goal-insight";
+import { useRequest } from "@/lib/narrative/use-request";
+import type { HabitInsightResult } from "@/lib/narrative/skills/habit-insight";
+import type { GoalInsightResult } from "@/lib/narrative/skills/goal-insight";
 import { buildRecurringHabit } from "@/lib/utils/build-recurring-habit";
 import { ProfileStep } from "@/components/habits/ProfileStep";
 import { HabitSelectionStep } from "@/components/habits/HabitSelectionStep";
@@ -85,7 +85,7 @@ export default function HabitsPage() {
     loading: insightLoading,
     error: insightError,
     generate: fetchInsight,
-  } = useAgent<HabitInsightResult>("/api/agent/habit-insight");
+  } = useRequest<HabitInsightResult>("/api/narrative/habit-insight");
 
   useEffect(() => {
     if (!selectedHabitId) return;
@@ -121,7 +121,7 @@ export default function HabitsPage() {
     loading: goalInsightLoading,
     error: goalInsightError,
     generate: fetchGoalInsight,
-  } = useAgent<GoalInsightResult>("/api/agent/goal-insight");
+  } = useRequest<GoalInsightResult>("/api/narrative/goal-insight");
 
   const selectedHabit = allHabitCandidates.find(
     (h) => h.id === selectedHabitId
@@ -299,3 +299,5 @@ export default function HabitsPage() {
     </div>
   );
 }
+
+

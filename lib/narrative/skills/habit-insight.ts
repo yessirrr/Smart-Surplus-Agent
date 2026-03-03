@@ -1,4 +1,4 @@
-﻿import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 import type { HabitCandidate, SurplusSummary } from "@/lib/types";
 
 export interface HabitInsightResult {
@@ -14,7 +14,7 @@ export interface HabitInsightContext {
   goalMode?: string;
 }
 
-const SYSTEM_PROMPT = `You are Odysseus, a personal finance AI assistant. You explain spending habits clearly and motivationally. You are warm but direct, like a smart friend who cares about your financial future.
+const SYSTEM_GUIDELINES = `You are Odysseus, a personal finance assistant. You explain spending habits clearly and motivationally. You are warm but direct, like a smart friend who cares about your financial future.
 
 Rules:
 - Never invent numbers. Only reference the data provided.
@@ -171,7 +171,7 @@ export async function generateHabitInsight(
   surplus: SurplusSummary,
   context: HabitInsightContext = {}
 ): Promise<HabitInsightResult> {
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     return getFallback(habit, context);
   }
 
@@ -200,11 +200,11 @@ export async function generateHabitInsight(
       },
     });
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 300,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_GUIDELINES },
         { role: "user", content: userMessage },
       ],
       response_format: {
@@ -221,3 +221,7 @@ export async function generateHabitInsight(
     return getFallback(habit, context);
   }
 }
+
+
+
+

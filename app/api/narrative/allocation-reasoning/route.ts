@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   generateAllocationReasoning,
   type AllocationReasoningInput,
-} from "@/lib/agent/skills/allocation-reasoning";
+} from "@/lib/narrative/skills/allocation-reasoning";
 
 export async function POST(request: Request) {
   try {
@@ -24,3 +24,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

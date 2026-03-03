@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   PaySchedule,
   SurplusSummary,
   Transaction,
@@ -100,7 +100,7 @@ export function buildCashflowSnapshot(
  *
  * Current support is intentionally narrow to preserve existing behavior:
  * biweekly Friday using an anchor of 2024-01-05.
- * TODO: expand to profile-derived anchors and additional schedules.
+ * Note: schedule support is currently scoped to deterministic biweekly Friday cycles.
  */
 export function computeDaysUntilNextPay(
   asOfDate: Date,
@@ -147,3 +147,4 @@ export function computeDaysUntilNextPay(
     nextPayDateISO,
   };
 }
+

@@ -1,4 +1,4 @@
-import { openai, isApiKeyValid } from "../openai-client";
+import { getModelClient, isProviderKeyConfigured } from "../model-client";
 
 export interface GoalInsightResult {
   behaviorFraming: string;
@@ -19,7 +19,7 @@ export interface GoalInsightInput {
   fiveYearInvestmentValue: number;
 }
 
-const SYSTEM_PROMPT = `You are Odysseus, a personal finance AI assistant. You translate abstract percentage reductions into concrete daily/weekly behavioral changes. You make savings feel tangible and achievable.
+const SYSTEM_GUIDELINES = `You are Odysseus, a personal finance assistant. You translate abstract percentage reductions into concrete daily/weekly behavioral changes. You make savings feel tangible and achievable.
 
 Rules:
 - Never invent numbers. Only reference the data provided.
@@ -119,18 +119,18 @@ function getFallback(input: GoalInsightInput): GoalInsightResult {
 export async function generateGoalInsight(
   input: GoalInsightInput
 ): Promise<GoalInsightResult> {
-  if (!isApiKeyValid()) {
+  if (!isProviderKeyConfigured()) {
     return getFallback(input);
   }
 
   try {
     const userMessage = JSON.stringify(input);
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const response = await getModelClient().chat.completions.create({
+      model: process.env.MODEL_PROVIDER_MODEL ?? "o4-mini",
       max_tokens: 300,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: SYSTEM_GUIDELINES },
         { role: "user", content: userMessage },
       ],
       response_format: {
@@ -147,3 +147,7 @@ export async function generateGoalInsight(
     return getFallback(input);
   }
 }
+
+
+
+
