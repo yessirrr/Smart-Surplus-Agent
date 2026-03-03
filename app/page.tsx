@@ -1,4 +1,4 @@
-import transactions from "@/data/transactions.json";
+﻿import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import type { Transaction, UserProfile } from "@/lib/types";
 import { analyzeTransactions } from "@/lib/domain";
@@ -17,11 +17,13 @@ export default function DashboardPage() {
   const profile = userProfile as UserProfile;
   const txns = transactions as Transaction[];
 
-  const analysis = analyzeTransactions(txns, {
-    frequency: "biweekly",
-    dayOfWeek: "friday",
+  const paySchedule = {
+    frequency: "biweekly" as const,
+    dayOfWeek: "friday" as const,
     amount: 2076,
-  });
+  };
+
+  const analysis = analyzeTransactions(txns, paySchedule);
 
   const cashBacksolve = computeStartingBalanceForTargetEnd(
     txns,
@@ -53,7 +55,12 @@ export default function DashboardPage() {
   const firstName = profile.name.split(" ")[0];
 
   // Cashflow snapshot for Decision Mode
-  const snapshot = buildCashflowSnapshot(analysis.surplusSummary, profile, txns);
+  const snapshot = buildCashflowSnapshot(
+    analysis.surplusSummary,
+    profile,
+    txns,
+    paySchedule
+  );
 
   // Recent transactions sorted newest first
   const recentTransactions = [...txns]
@@ -79,3 +86,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -1136,10 +1136,14 @@ function getTodayISO(snapshot: CashflowSnapshot): string {
     snapshotDate?: string;
     snapshotDateISO?: string;
     latestTransactionDate?: string;
+    latestTransactionDateISO?: string;
   };
 
   const candidate =
-    withDate.snapshotDate ?? withDate.snapshotDateISO ?? withDate.latestTransactionDate;
+    withDate.snapshotDate ??
+    withDate.snapshotDateISO ??
+    withDate.latestTransactionDateISO ??
+    withDate.latestTransactionDate;
   if (typeof candidate === "string" && ISO_DATE_RE.test(candidate)) {
     return candidate;
   }
@@ -1223,3 +1227,4 @@ function projectPlannedDivergence(
         : "Assumes purchase happens after the 90-day window",
   };
 }
+

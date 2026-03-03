@@ -1,11 +1,15 @@
-import type { Transaction, PaySchedule, FullAnalysis } from "../types";
+﻿import type { FullAnalysis, PaySchedule, Transaction } from "../types";
 import { detectRecurringPatterns } from "./recurring-detector";
 import { classifyHabits } from "./habit-classifier";
 import { computeSurplus } from "./surplus-engine";
 
 /**
  * Orchestrates the full analysis pipeline:
- *   detect recurring → classify habits → compute surplus
+ * detect recurring -> classify habits -> compute surplus.
+ *
+ * paySchedule stays in this contract for cross-domain consistency.
+ * The current computeSurplus implementation is intentionally ledger-driven
+ * and does not yet model pay-timing effects.
  */
 export function analyzeTransactions(
   transactions: Transaction[],
@@ -27,24 +31,28 @@ export function analyzeTransactions(
 export { detectRecurringPatterns } from "./recurring-detector";
 export { classifyHabits } from "./habit-classifier";
 export { computeSurplus } from "./surplus-engine";
+export { buildCashflowSnapshot, computeDaysUntilNextPay } from "./cashflow-model";
+export { forecastVariableSpendUntilNextPay } from "./spending-forecast";
+export { boxMuller, mulberry32, quantile } from "./prng";
 
 // Re-export all types
 export type {
+  AllocationPlan,
+  DecisionSource,
+  FullAnalysis,
+  HabitCandidate,
+  HabitGoal,
+  HabitIntensity,
+  HabitLabel,
+  HabitRule,
+  PaySchedule,
+  PeriodSurplus,
+  RecurringPattern,
+  SpendingForecast,
+  SurplusEvent,
+  SurplusSummary,
+  Timeframe,
   Transaction,
   TransactionCategory,
   UserProfile,
-  HabitIntensity,
-  Timeframe,
-  DecisionSource,
-  HabitGoal,
-  HabitRule,
-  HabitLabel,
-  SurplusEvent,
-  AllocationPlan,
-  RecurringPattern,
-  HabitCandidate,
-  PaySchedule,
-  PeriodSurplus,
-  SurplusSummary,
-  FullAnalysis,
 } from "../types";

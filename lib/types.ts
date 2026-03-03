@@ -205,3 +205,13 @@ export interface FullAnalysis {
   surplusSummary: SurplusSummary;
   generatedAt: string;
 }
+
+export interface SpendingForecast {
+  windowDays: number;
+  expectedWindowSpend: number;
+  p50WindowSpend: number;
+  p90WindowSpend: number;
+  seed: number;
+  trials: number;
+  drivers?: Array<{ category: string; contribution: number }>;
+}

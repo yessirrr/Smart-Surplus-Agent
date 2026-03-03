@@ -1,4 +1,4 @@
-import type { CashflowSnapshot } from "./cashflow-model";
+﻿import type { CashflowSnapshot } from "./cashflow-model";
 import {
   assertValidIntent,
   type DecisionIntent,
@@ -911,11 +911,13 @@ function getTodayISO(snapshot: CashflowSnapshot): string {
     snapshotDate?: string;
     snapshotDateISO?: string;
     latestTransactionDate?: string;
+    latestTransactionDateISO?: string;
   };
 
   const candidate =
     snapshotWithDate.snapshotDate ??
     snapshotWithDate.snapshotDateISO ??
+    snapshotWithDate.latestTransactionDateISO ??
     snapshotWithDate.latestTransactionDate;
 
   if (typeof candidate === "string" && ISO_DATE_RE.test(candidate)) {
@@ -1022,4 +1024,5 @@ function moneyLabel(amount: number): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
 

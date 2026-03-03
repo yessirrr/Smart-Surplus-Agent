@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Transaction,
   HabitCandidate,
   PaySchedule,
@@ -26,6 +26,7 @@ const ESSENTIAL_CATEGORIES = new Set<string>([
 export function computeSurplus(
   transactions: Transaction[],
   habitCandidates: HabitCandidate[],
+  // Intentionally unused: surplus is currently transaction-ledger based, not schedule-modeled.
   _paySchedule: PaySchedule
 ): SurplusSummary {
   if (transactions.length === 0) {
@@ -166,7 +167,7 @@ export function computeSurplus(
   };
 }
 
-// ── Helpers ───────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function computeTrend(
   periods: PeriodSurplus[]
@@ -206,3 +207,4 @@ function emptySummary(): SurplusSummary {
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
