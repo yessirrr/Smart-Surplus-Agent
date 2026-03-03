@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { getAiOptIn, getAiTermsAccepted } from "@/lib/client/aiOptIn";
 import type { CashflowSnapshot } from "@/lib/domain/cashflow-model";
+import type { PaySchedule, Transaction } from "@/lib/types";
 import { SpendInvestBreakdown } from "@/components/SpendInvestBreakdown";
 import { AgentInsightCard } from "@/components/AgentInsightCard";
 import { DecisionMode } from "@/components/DecisionMode";
@@ -13,6 +14,8 @@ interface DashboardAiStackProps {
   habitCount: number;
   monthlySavings: number;
   snapshot: CashflowSnapshot;
+  transactions: Transaction[];
+  paySchedule: PaySchedule;
 }
 
 export function DashboardAiStack({
@@ -21,6 +24,8 @@ export function DashboardAiStack({
   habitCount,
   monthlySavings,
   snapshot,
+  transactions,
+  paySchedule,
 }: DashboardAiStackProps) {
   const [isAiOptInReady, setIsAiOptInReady] = useState(false);
   const [isAiOptedIn, setIsAiOptedIn] = useState(false);
@@ -49,7 +54,11 @@ export function DashboardAiStack({
           monthlySavings={monthlySavings}
         />
       ) : null}
-      <DecisionMode snapshot={snapshot} />
+      <DecisionMode
+        snapshot={snapshot}
+        transactions={transactions}
+        paySchedule={paySchedule}
+      />
     </div>
   );
 }

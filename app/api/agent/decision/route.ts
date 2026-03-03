@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import {
   generateDecisionExplanationWithSource,
   type DecisionExplanationInput,
@@ -17,6 +17,20 @@ export async function POST(request: Request) {
       if (!body.intent || !body.simulation || !Array.isArray(body.reasonCodes)) {
         return NextResponse.json(
           { error: "intent, simulation, and reasonCodes are required for v2" },
+          { status: 400 }
+        );
+      }
+
+      if (body.forecast && typeof body.forecast !== "object") {
+        return NextResponse.json(
+          { error: "forecast must be an object when provided" },
+          { status: 400 }
+        );
+      }
+
+      if (body.policy && typeof body.policy !== "object") {
+        return NextResponse.json(
+          { error: "policy must be an object when provided" },
           { status: 400 }
         );
       }

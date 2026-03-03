@@ -80,10 +80,13 @@ export default function DashboardPage() {
           analysis.surplusSummary.averageMonthlySurplus
         }
         snapshot={snapshot}
+        transactions={txns}
+        paySchedule={paySchedule}
       />
       <SectionHeader title="Recent Transactions" />
       <TransactionList transactions={recentTransactions} />
     </div>
   );
 }
+
 

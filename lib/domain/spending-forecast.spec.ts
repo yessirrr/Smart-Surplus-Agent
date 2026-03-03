@@ -1,10 +1,13 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test from "node:test";
 import transactions from "@/data/transactions.json";
 import userProfile from "@/data/user-profile.json";
 import { analyzeTransactions } from "@/lib/domain";
 import { buildCashflowSnapshot } from "@/lib/domain/cashflow-model";
 import { forecastVariableSpendUntilNextPay } from "@/lib/domain/spending-forecast";
+import { simulateDecisionByIntent } from "@/lib/domain/decision-simulator";
+import { evaluateDecisionPolicy } from "@/lib/domain/policy-evaluator";
+import type { DecisionIntent } from "@/lib/domain/decision-intent";
 import type { PaySchedule, Transaction, UserProfile } from "@/lib/types";
 
 const paySchedule: PaySchedule = {
@@ -101,4 +104,52 @@ test("forecastVariableSpendUntilNextPay safely returns zeroes when window cannot
   assert.equal(forecast.expectedWindowSpend, 0);
   assert.equal(forecast.p50WindowSpend, 0);
   assert.equal(forecast.p90WindowSpend, 0);
+});
+
+test("fixed seed yields stable forecast and policy output", () => {
+  const snapshot = buildSnapshot();
+
+  const intent: DecisionIntent = {
+    intentType: "impulse",
+    amount: 80,
+    cadence: "one_time",
+    horizon: { kind: "today" },
+    categoryHint: "dining",
+  };
+
+  const simulation = simulateDecisionByIntent(intent, snapshot);
+
+  const firstForecast = forecastVariableSpendUntilNextPay({
+    transactions: txns,
+    snapshot,
+    paySchedule,
+    seed: 777,
+    trials: 500,
+  });
+  const firstPolicy = evaluateDecisionPolicy({
+    intentType: intent.intentType,
+    cadence: intent.cadence,
+    snapshot,
+    forecast: firstForecast,
+    simulation,
+  });
+
+  const secondForecast = forecastVariableSpendUntilNextPay({
+    transactions: txns,
+    snapshot,
+    paySchedule,
+    seed: 777,
+    trials: 500,
+  });
+  const secondPolicy = evaluateDecisionPolicy({
+    intentType: intent.intentType,
+    cadence: intent.cadence,
+    snapshot,
+    forecast: secondForecast,
+    simulation,
+  });
+
+  assert.equal(firstForecast.p50WindowSpend, secondForecast.p50WindowSpend);
+  assert.equal(firstForecast.p90WindowSpend, secondForecast.p90WindowSpend);
+  assert.deepEqual(firstPolicy, secondPolicy);
 });

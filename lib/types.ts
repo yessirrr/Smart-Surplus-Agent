@@ -206,6 +206,21 @@ export interface FullAnalysis {
   generatedAt: string;
 }
 
+export type PolicyAction = "allow" | "warn" | "block";
+
+export interface PolicyDecision {
+  action: PolicyAction;
+  safetyPercentileUsed?: 50 | 90;
+  reasonCodes: string[];
+  requiresApproval: boolean;
+}
+
+export interface DecisionModeRunMetadata {
+  forecast?: SpendingForecast;
+  freeCashP50?: number;
+  freeCashP90?: number;
+  policy?: PolicyDecision;
+}
 export interface SpendingForecast {
   windowDays: number;
   expectedWindowSpend: number;
@@ -215,3 +230,4 @@ export interface SpendingForecast {
   trials: number;
   drivers?: Array<{ category: string; contribution: number }>;
 }
+

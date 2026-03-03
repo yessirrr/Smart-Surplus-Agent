@@ -48,6 +48,7 @@ export function SpendInvestBreakdown({
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [termsMode, setTermsMode] = useState<"enable" | "view">("enable");
   const [modalTrigger, setModalTrigger] = useState<ModalTrigger>("enable_button");
+  const [pendingEnable, setPendingEnable] = useState(false);
 
   const enableTriggerRef = useRef<HTMLButtonElement>(null);
   const viewTriggerRef = useRef<HTMLButtonElement>(null);
@@ -56,22 +57,20 @@ export function SpendInvestBreakdown({
   function openEnableTerms(trigger: ModalTrigger = "enable_button") {
     setModalTrigger(trigger);
     setTermsMode("enable");
+    setPendingEnable(true);
     setIsTermsOpen(true);
   }
 
   function openViewTerms() {
     setModalTrigger("view_button");
     setTermsMode("view");
+    setPendingEnable(false);
     setIsTermsOpen(true);
   }
 
   function closeTerms() {
+    setPendingEnable(false);
     setIsTermsOpen(false);
-  }
-
-  function enableAiDirect() {
-    setAiOptIn(true);
-    onAiOptInChange(true);
   }
 
   function handleEnableOdysseus() {
@@ -79,17 +78,15 @@ export function SpendInvestBreakdown({
     onAiTermsAcceptedChange(true);
     setAiOptIn(true);
     onAiOptInChange(true);
+    setPendingEnable(false);
   }
 
   function handleToggleAi() {
     if (isAiOptedIn) {
       setAiOptIn(false);
       onAiOptInChange(false);
-      return;
-    }
-
-    if (isAiTermsAccepted) {
-      enableAiDirect();
+      setPendingEnable(false);
+      setIsTermsOpen(false);
       return;
     }
 
@@ -179,11 +176,6 @@ export function SpendInvestBreakdown({
                         {isAiOptedIn ? "Active" : "Inactive"}
                       </p>
                     </div>
-                    <p className="text-xs text-ws-grey mt-2">
-                      {isAiOptedIn
-                        ? "AI insights are enabled."
-                        : "Enable Odysseus AI to unlock guided insights and scenario explanations."}
-                    </p>
                   </div>
 
                   <button

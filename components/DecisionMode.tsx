@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { formatCurrency } from "@/lib/utils";
 import { useAgent } from "@/lib/agent/use-agent";
 import type { CashflowSnapshot } from "@/lib/domain/cashflow-model";
+import type { DecisionModeRunMetadata, PolicyAction, PaySchedule, Transaction } from "@/lib/types";
 import {
   TARGET_BUFFER_MONTHS,
   clampMoney,
@@ -19,6 +20,14 @@ import {
   type SpendCadence,
   type TimeHorizon,
 } from "@/lib/domain/decision-intent";
+import {
+  deriveForecastSeed,
+  forecastVariableSpendUntilNextPay,
+} from "@/lib/domain/spending-forecast";
+import {
+  computeForecastFreeCash,
+  evaluateDecisionPolicy,
+} from "@/lib/domain/policy-evaluator";
 import type {
   ClarificationField,
   ParsedDecisionIntentV2,
@@ -47,6 +56,13 @@ const REASON_LABELS: Record<string, string> = {
   RECURRING_RAISES_BURN: "Recurring expense increases monthly drag",
   SURPLUS_NEGATIVE: "Monthly surplus turns negative",
   BUFFER_RULE_HELD: `Emergency cushion stays above ${TARGET_BUFFER_MONTHS} months`,
+  FREE_CASH_P90_NEGATIVE: "P90 cash floor goes below $0 before next paycheck",
+  FREE_CASH_P50_NEGATIVE: "P50 cash floor goes below $0 before next paycheck",
+  BUFFER_LOW: "Emergency cushion is below 1 month",
+  BUFFER_CRITICAL: "Emergency cushion is below 0.5 months",
+  SAFETY_CUSHION_BELOW_MIN: "Emergency cushion drops below the minimum safety cushion",
+  PROJECTED_BALANCE_NEGATIVE: "Projected account balance goes below $0",
+  AMOUNT_EXCEEDS_SAFE_BUDGET: "Amount exceeds your safe budget",
 };
 
 const VERDICT_STYLE = {
@@ -58,12 +74,12 @@ const VERDICT_STYLE = {
   tight: {
     text: "text-[#f2d994]",
     chip: "bg-[rgba(196,155,60,0.22)] text-[#f2d994] border-[rgba(242,217,148,0.34)]",
-    label: "This stretches your cushion.",
+    label: "Proceed with caution.",
   },
   risky: {
     text: "text-[#f3a49d]",
     chip: "bg-[rgba(220,67,54,0.20)] text-[#f3a49d] border-[rgba(243,164,157,0.34)]",
-    label: "This breaks your safety rule.",
+    label: "Not safe.",
   },
 } as const;
 
@@ -78,6 +94,8 @@ type ClarifyDateMode = "today" | "this_week" | "this_month" | "date";
 
 interface DecisionModeProps {
   snapshot: CashflowSnapshot;
+  transactions: Transaction[];
+  paySchedule: PaySchedule;
 }
 
 interface DivergenceForkData {
@@ -99,7 +117,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DIVERGENCE_WEEKS = 12;
 const WEEKLY_RATE = 0.07 / 52;
 
-export function DecisionMode({ snapshot }: DecisionModeProps) {
+export function DecisionMode({ snapshot, transactions, paySchedule }: DecisionModeProps) {
   const [input, setInput] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -107,6 +125,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
   const [parsedIntent, setParsedIntent] = useState<ParsedDecisionIntentV2 | null>(null);
   const [resolvedIntent, setResolvedIntent] = useState<DecisionIntent | null>(null);
   const [simulation, setSimulation] = useState<DecisionSimulationV2 | null>(null);
+  const [decisionMeta, setDecisionMeta] = useState<DecisionModeRunMetadata | null>(null);
   const [divergence, setDivergence] = useState<DivergenceForkData | null>(null);
   const [showReasoning, setShowReasoning] = useState(false);
 
@@ -143,14 +162,48 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
     explanation?.confidence ??
     (parsedIntent?.needsClarification ? "low" : simulation ? "medium" : "high");
 
+  const displayedVerdict = decisionMeta?.policy
+    ? mapPolicyActionToVerdict(decisionMeta.policy.action)
+    : "safe";
+
   const runScenario = useCallback(
     (parsed: ParsedDecisionIntentV2, clarificationUsed: boolean) => {
       const intent = toDomainIntent(parsed);
+      const seed = deriveForecastSeed({
+        snapshotDateISO: snapshot.snapshotDateISO,
+        intent,
+      });
+
+      const forecast = forecastVariableSpendUntilNextPay({
+        transactions,
+        snapshot,
+        paySchedule,
+        seed,
+        trials: 500,
+        lookbackDays: 90,
+      });
+
       const nextSimulation = simulateDecisionByIntent(intent, snapshot);
+      const nextForecastCash = computeForecastFreeCash(snapshot, forecast);
+      const nextPolicy = evaluateDecisionPolicy({
+        intentType: intent.intentType,
+        cadence: intent.cadence,
+        snapshot,
+        forecast,
+        simulation: nextSimulation,
+      });
       const nextDivergence = buildDivergenceData(intent, nextSimulation, snapshot);
+
+      const nextMeta: DecisionModeRunMetadata = {
+        forecast,
+        freeCashP50: nextForecastCash.freeCashP50,
+        freeCashP90: nextForecastCash.freeCashP90,
+        policy: nextPolicy,
+      };
 
       setResolvedIntent(intent);
       setSimulation(nextSimulation);
+      setDecisionMeta(nextMeta);
       setDivergence(nextDivergence);
       setShowReasoning(false);
       setPhase("result");
@@ -159,6 +212,11 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
         intent.intentType === "planned_purchase" && nextSimulation.projectedDate
           ? diffDaysISO(getTodayISO(snapshot), nextSimulation.projectedDate)
           : null;
+
+      const reasonCodes = [
+        ...nextSimulation.reasons,
+        ...nextPolicy.reasonCodes,
+      ];
 
       const payload: DecisionExplanationInputV2 = {
         version: "v2",
@@ -190,15 +248,31 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
           requiredMonthlySavings: nextSimulation.monthlySavingsNeeded ?? null,
           targetBufferMonths: nextSimulation.targetBufferMonths,
           divergenceDelta90d: nextDivergence?.deltaAt90Days ?? null,
+          forecastExpectedWindowSpend: forecast.expectedWindowSpend,
+          forecastP50WindowSpend: forecast.p50WindowSpend,
+          forecastP90WindowSpend: forecast.p90WindowSpend,
+          forecastWindowDays: forecast.windowDays,
+          forecastTrials: forecast.trials,
+          forecastSeed: forecast.seed,
+          freeCashP50: nextForecastCash.freeCashP50 ?? null,
+          freeCashP90: nextForecastCash.freeCashP90 ?? null,
+          policyAction: nextPolicy.action,
+          policyReasonCodes: nextPolicy.reasonCodes,
+          policySafetyPercentileUsed: nextPolicy.safetyPercentileUsed ?? null,
+          policyRequiresApproval: nextPolicy.requiresApproval,
         },
-        reasonCodes: nextSimulation.reasons,
+        reasonCodes,
         clarificationUsed,
         assumptions: buildAssumptions(parsed, intent, nextSimulation),
+        forecast,
+        policy: nextPolicy,
+        freeCashP50: nextForecastCash.freeCashP50,
+        freeCashP90: nextForecastCash.freeCashP90,
       };
 
       fetchExplanation(payload as unknown as Record<string, unknown>);
     },
-    [snapshot, fetchExplanation]
+    [fetchExplanation, paySchedule, snapshot, transactions]
   );
 
   const hydrateClarificationState = useCallback((parsed: ParsedDecisionIntentV2) => {
@@ -232,6 +306,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
     setParsedIntent(null);
     setResolvedIntent(null);
     setSimulation(null);
+    setDecisionMeta(null);
     setDivergence(null);
 
     try {
@@ -313,6 +388,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
     setParsedIntent(null);
     setResolvedIntent(null);
     setSimulation(null);
+    setDecisionMeta(null);
     setDivergence(null);
     setShowReasoning(false);
     setClarifyAmount("");
@@ -328,8 +404,8 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
       return null;
     }
 
-    return buildMetricTiles(resolvedIntent, simulation);
-  }, [resolvedIntent, simulation, snapshot]);
+    return buildMetricTiles(resolvedIntent, simulation, displayedVerdict);
+  }, [displayedVerdict, resolvedIntent, simulation]);
 
   const placeholder = PLACEHOLDERS[placeholderIndex];
 
@@ -504,7 +580,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
         </AnimatePresence>
 
         <AnimatePresence>
-          {phase === "result" && simulation && resolvedIntent && metricTiles && (
+          {phase === "result" && simulation && resolvedIntent && metricTiles && decisionMeta?.policy && (
             <motion.div
               key="result"
               initial={{ opacity: 0, y: 12 }}
@@ -516,9 +592,9 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
               <div className="rounded-[18px] bg-ws-charcoal text-white p-5 sm:p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`text-[11px] uppercase tracking-[0.08em] rounded-[72px] px-2.5 py-1 border ${VERDICT_STYLE[simulation.verdict].chip}`}
+                    className={`text-[11px] uppercase tracking-[0.08em] rounded-[72px] px-2.5 py-1 border ${VERDICT_STYLE[displayedVerdict].chip}`}
                   >
-                    {VERDICT_STYLE[simulation.verdict].label}
+                    {VERDICT_STYLE[displayedVerdict].label}
                   </span>
                   <span
                     className={`text-[11px] uppercase tracking-[0.08em] rounded-[72px] px-2.5 py-1 border ${CONFIDENCE_STYLE[confidenceLabel]}`}
@@ -527,11 +603,14 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                   </span>
                 </div>
 
-                <p className={`mt-4 text-[2.05rem] sm:text-[2.7rem] leading-none font-bold ${VERDICT_STYLE[simulation.verdict].text}`}>
-                  {VERDICT_STYLE[simulation.verdict].label}
+                <p className={`mt-4 text-[2.05rem] sm:text-[2.7rem] leading-none font-bold ${VERDICT_STYLE[displayedVerdict].text}`}>
+                  {VERDICT_STYLE[displayedVerdict].label}
                 </p>
                 <p className="text-sm sm:text-base text-[rgba(255,255,255,0.9)] mt-3">
-                  {buildWhyLine(resolvedIntent, simulation)}
+                  {buildWhyLine(resolvedIntent, simulation, decisionMeta.policy.action)}
+                </p>
+                <p className="text-[11px] text-[rgba(255,255,255,0.72)] mt-1">
+                  Using 90% safety floor (P90)
                 </p>
                 <p className="text-xs text-[rgba(255,255,255,0.72)] mt-1 min-h-[18px]">
                   {explanationLoading
@@ -597,7 +676,7 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
                       <div className="mt-3 rounded-[8px] bg-ws-off-white p-3 space-y-2">
                         <p className="text-[11px] text-ws-grey uppercase tracking-wide">Machine reasons</p>
                         <p className="text-xs text-ws-charcoal">
-                          {simulation.reasons.map((r) => REASON_LABELS[r] ?? r).join(" | ")}
+                          {[...simulation.reasons, ...(decisionMeta.policy.reasonCodes ?? [])].map((r) => REASON_LABELS[r] ?? r).join(" | ")}
                         </p>
 
                         <p className="text-[11px] text-ws-grey uppercase tracking-wide mt-2">Paycheck timing</p>
@@ -643,8 +722,24 @@ export function DecisionMode({ snapshot }: DecisionModeProps) {
 
 function buildWhyLine(
   intent: DecisionIntent,
-  simulation: DecisionSimulationV2
+  simulation: DecisionSimulationV2,
+  policyAction: PolicyAction
 ): string {
+  if (policyAction === "allow") {
+    if (intent.intentType === "planned_purchase") {
+      return "Projected purchase-date cash stays above $0 and your emergency cushion stays above the minimum safety cushion.";
+    }
+
+    if (intent.intentType === "big_goal") {
+      return "This goal fits within your safe budget and keeps your minimum safety cushion intact.";
+    }
+
+    if (intent.intentType === "recurring") {
+      return "This recurring cost stays within your safety cushion and keeps your monthly surplus positive.";
+    }
+
+    return "Your account stays above $0 before your next paycheck and your emergency cushion stays above the minimum safety cushion.";
+  }
   if (intent.intentType === "planned_purchase") {
     const projected = simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore;
     if (projected < 0) {
@@ -992,11 +1087,20 @@ function toDomainIntent(parsed: ParsedDecisionIntentV2): DecisionIntent {
   return intent;
 }
 
+function mapPolicyActionToVerdict(
+  action: "allow" | "warn" | "block"
+): "safe" | "tight" | "risky" {
+  if (action === "allow") return "safe";
+  if (action === "warn") return "tight";
+  return "risky";
+}
+
 function buildMetricTiles(
   intent: DecisionIntent,
-  simulation: DecisionSimulationV2
+  simulation: DecisionSimulationV2,
+  verdict: "safe" | "tight" | "risky"
 ): MetricTileData[] {
-  const primary = buildPrimaryMetric(intent, simulation);
+  const primary = buildPrimaryMetric(intent, simulation, verdict);
   const secondary = buildSecondaryMetric(intent, simulation);
 
   return [primary, secondary];
@@ -1004,7 +1108,8 @@ function buildMetricTiles(
 
 function buildPrimaryMetric(
   intent: DecisionIntent,
-  simulation: DecisionSimulationV2
+  simulation: DecisionSimulationV2,
+  verdict: "safe" | "tight" | "risky"
 ): MetricTileData {
   if (intent.intentType === "planned_purchase") {
     const projected = simulation.projectedFreeCashAtPurchase ?? simulation.freeCashBefore;
@@ -1035,7 +1140,7 @@ function buildPrimaryMetric(
       label: "Monthly drag",
       value: `-${formatCurrency(Math.abs(simulation.recurringImpactMonthly ?? 0))}`,
       context: "Added monthly cost from this recurring expense.",
-      colorClass: simulation.verdict === "risky" ? "text-ws-red" : "text-ws-yellow",
+      colorClass: verdict === "risky" ? "text-ws-red" : "text-ws-yellow",
     };
   }
 

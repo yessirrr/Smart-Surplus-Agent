@@ -32,7 +32,8 @@ export { detectRecurringPatterns } from "./recurring-detector";
 export { classifyHabits } from "./habit-classifier";
 export { computeSurplus } from "./surplus-engine";
 export { buildCashflowSnapshot, computeDaysUntilNextPay } from "./cashflow-model";
-export { forecastVariableSpendUntilNextPay } from "./spending-forecast";
+export { deriveForecastSeed, forecastVariableSpendUntilNextPay } from "./spending-forecast";
+export { computeForecastFreeCash, evaluateDecisionPolicy } from "./policy-evaluator";
 export { boxMuller, mulberry32, quantile } from "./prng";
 
 // Re-export all types
@@ -56,3 +57,5 @@ export type {
   TransactionCategory,
   UserProfile,
 } from "../types";
+
+

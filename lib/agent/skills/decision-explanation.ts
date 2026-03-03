@@ -1,5 +1,6 @@
 import type { DecisionSimulationV2 } from "@/lib/domain/decision-simulator";
 import type { IntentType, SpendCadence, TimeHorizon } from "@/lib/domain/decision-intent";
+import type { PolicyDecision, SpendingForecast } from "@/lib/types";
 import { openai, isApiKeyValid } from "../openai-client";
 
 export interface DecisionExplanationResult {
@@ -58,6 +59,18 @@ export interface DecisionExplanationFacts {
   requiredMonthlySavings?: number | null;
   targetBufferMonths?: number | null;
   divergenceDelta90d?: number | null;
+  forecastExpectedWindowSpend?: number | null;
+  forecastP50WindowSpend?: number | null;
+  forecastP90WindowSpend?: number | null;
+  forecastWindowDays?: number | null;
+  forecastTrials?: number | null;
+  forecastSeed?: number | null;
+  freeCashP50?: number | null;
+  freeCashP90?: number | null;
+  policyAction?: "allow" | "warn" | "block" | null;
+  policyReasonCodes?: string[] | null;
+  policySafetyPercentileUsed?: 50 | 90 | null;
+  policyRequiresApproval?: boolean | null;
 }
 
 export interface DecisionExplanationInputV2 {
@@ -68,6 +81,10 @@ export interface DecisionExplanationInputV2 {
   reasonCodes: string[];
   clarificationUsed?: boolean;
   assumptions?: string[];
+  forecast?: SpendingForecast;
+  policy?: PolicyDecision;
+  freeCashP50?: number;
+  freeCashP90?: number;
 }
 
 export type DecisionExplanationInput =
@@ -147,6 +164,24 @@ function resolveConfidenceV2(input: DecisionExplanationInputV2): "low" | "medium
   return "high";
 }
 
+function toNarrativeVerdict(
+  policyAction: PolicyDecision["action"] | null | undefined,
+  fallbackVerdict: DecisionSimulationV2["verdict"]
+): DecisionSimulationV2["verdict"] {
+  if (policyAction === "allow") {
+    return "safe";
+  }
+
+  if (policyAction === "warn") {
+    return "tight";
+  }
+
+  if (policyAction === "block") {
+    return "risky";
+  }
+
+  return fallbackVerdict;
+}
 function fallbackLegacy(input: DecisionExplanationInputLegacy): DecisionExplanationResult {
   const cadence =
     input.cadence === "weekly"
@@ -192,6 +227,10 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
   const { simulation, facts, intent } = input;
   const confidence = resolveConfidenceV2(input);
   const assumptions = input.assumptions?.slice(0, 2) ?? [];
+  const narrativeVerdict = toNarrativeVerdict(
+    input.policy?.action ?? facts.policyAction,
+    simulation.verdict
+  );
 
   const action = simulation.recommendedAction;
 
@@ -204,9 +243,9 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
 
     return {
       headline:
-        projected < 0
+        narrativeVerdict === "risky"
           ? "This breaks your safety rule."
-          : simulation.bufferMonthsAfter < simulation.targetBufferMonths
+          : narrativeVerdict === "tight"
             ? "This stretches your cushion."
             : "You’re clear.",
       explanation:
@@ -214,7 +253,7 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
           ? `On ${dateLabel}, your projected account balance after purchase is ${money(simulation.freeCashAfter)} and goes below $0. Emergency cushion after purchase is ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials.`
           : `On ${dateLabel}, projected account balance after purchase is ${money(simulation.freeCashAfter)} and stays above $0. Emergency cushion after purchase is ${simulation.bufferMonthsAfter.toFixed(1)} months of essentials.`,
       suggestion:
-        simulation.verdict === "risky"
+        narrativeVerdict === "risky"
           ? safeDateLine
           : `${action.title}. ${action.detail}`,
       confidence,
@@ -235,11 +274,13 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
 
     return {
       headline:
-        simulation.verdict === "safe"
+        narrativeVerdict === "safe"
           ? "You’re clear."
-          : "This breaks your safety rule.",
+          : narrativeVerdict === "tight"
+            ? "This stretches your cushion."
+            : "This breaks your safety rule.",
       explanation:
-        simulation.verdict === "safe"
+        narrativeVerdict === "safe"
           ? `Safe budget today is ${money(simulation.maxSafeOneTimeSpend ?? 0)}, so this goal stays inside your minimum safety cushion.`
           : `Safe budget today is ${money(simulation.maxSafeOneTimeSpend ?? 0)}, leaving a gap of ${money(gap)}. ${planLine}`,
       suggestion: `${action.title}. ${action.detail}`,
@@ -254,9 +295,9 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
 
     return {
       headline:
-        newSurplus < 0
+        narrativeVerdict === "risky"
           ? "This breaks your safety rule."
-          : simulation.verdict === "tight"
+          : narrativeVerdict === "tight"
             ? "This stretches your cushion."
             : "You’re clear.",
       explanation: `This adds ${money(drag)}/month of monthly drag. New monthly surplus is ${money(newSurplus)}.`,
@@ -269,9 +310,9 @@ function fallbackV2(input: DecisionExplanationInputV2): DecisionExplanationResul
   const dipsBelowZero = simulation.freeCashAfter < 0;
   return {
     headline:
-      simulation.verdict === "safe"
+      narrativeVerdict === "safe"
         ? "You’re clear."
-        : simulation.verdict === "tight"
+        : narrativeVerdict === "tight"
           ? "This stretches your cushion."
           : "This breaks your safety rule.",
     explanation: dipsBelowZero
@@ -340,3 +381,5 @@ export async function generateDecisionExplanation(
   const { result } = await generateDecisionExplanationWithSource(input);
   return result;
 }
+
+

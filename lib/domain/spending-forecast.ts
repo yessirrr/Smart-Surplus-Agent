@@ -4,6 +4,7 @@
   Transaction,
   TransactionCategory,
 } from "@/lib/types";
+import type { DecisionIntent } from "./decision-intent";
 import type { CashflowSnapshot } from "./cashflow-model";
 import { computeDaysUntilNextPay } from "./cashflow-model";
 import { mulberry32, quantile } from "./prng";
@@ -103,6 +104,27 @@ export function forecastVariableSpendUntilNextPay(
   };
 }
 
+export function deriveForecastSeed(args: {
+  snapshotDateISO: string;
+  intent: DecisionIntent;
+}): number {
+  const source = [
+    args.snapshotDateISO,
+    args.intent.intentType,
+    args.intent.cadence,
+    args.intent.amount.toFixed(2),
+    args.intent.horizon.kind,
+    String(args.intent.horizon.value ?? ""),
+  ].join("|");
+
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
 function isVariableSpendTransaction(
   transaction: Transaction,
   start: Date,
@@ -236,3 +258,4 @@ function addDaysUTC(base: Date, days: number): Date {
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+

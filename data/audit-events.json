@@ -1,0 +1,173 @@
+[
+  {
+    "eventType": "decision_check",
+    "timestampISO": "2026-03-03T00:40:56.732Z",
+    "snapshotDateISO": "2025-12-31",
+    "nextPayDateISO": "2026-01-02",
+    "intent": {
+      "intentType": "planned_purchase",
+      "cadence": "one_time",
+      "amount": 1000,
+      "horizon": {
+        "kind": "this_month"
+      }
+    },
+    "seed": 3308862451,
+    "forecast": {
+      "windowDays": 2,
+      "expectedWindowSpend": 98.56,
+      "p50WindowSpend": 87.26,
+      "p90WindowSpend": 180.24,
+      "trials": 500
+    },
+    "policy": {
+      "action": "allow",
+      "reasonCodes": [],
+      "safetyPercentileUsed": 90,
+      "requiresApproval": false
+    }
+  },
+  {
+    "eventType": "decision_check",
+    "timestampISO": "2026-03-03T00:47:06.613Z",
+    "snapshotDateISO": "2025-12-31",
+    "nextPayDateISO": "2026-01-02",
+    "intent": {
+      "intentType": "big_goal",
+      "cadence": "one_time",
+      "amount": 10000,
+      "horizon": {
+        "kind": "date",
+        "value": "2025-10-30"
+      }
+    },
+    "seed": 4004045561,
+    "forecast": {
+      "windowDays": 2,
+      "expectedWindowSpend": 110.45,
+      "p50WindowSpend": 96.16,
+      "p90WindowSpend": 207.75,
+      "trials": 500
+    },
+    "policy": {
+      "action": "allow",
+      "reasonCodes": [],
+      "safetyPercentileUsed": 90,
+      "requiresApproval": false
+    }
+  },
+  {
+    "eventType": "decision_check",
+    "timestampISO": "2026-03-03T00:50:52.958Z",
+    "snapshotDateISO": "2025-12-31",
+    "nextPayDateISO": "2026-01-02",
+    "intent": {
+      "intentType": "big_goal",
+      "cadence": "one_time",
+      "amount": 10000,
+      "horizon": {
+        "kind": "relative_days",
+        "value": 730
+      }
+    },
+    "seed": 1906716496,
+    "forecast": {
+      "windowDays": 2,
+      "expectedWindowSpend": 101.4,
+      "p50WindowSpend": 90.06,
+      "p90WindowSpend": 183.46,
+      "trials": 500
+    },
+    "policy": {
+      "action": "allow",
+      "reasonCodes": [],
+      "safetyPercentileUsed": 90,
+      "requiresApproval": false
+    }
+  },
+  {
+    "eventType": "decision_check",
+    "timestampISO": "2026-03-03T00:57:05.723Z",
+    "snapshotDateISO": "2025-12-31",
+    "nextPayDateISO": "2026-01-02",
+    "intent": {
+      "intentType": "big_goal",
+      "cadence": "one_time",
+      "amount": 10000,
+      "horizon": {
+        "kind": "relative_days",
+        "value": 365
+      }
+    },
+    "seed": 3191418170,
+    "forecast": {
+      "windowDays": 2,
+      "expectedWindowSpend": 96.7,
+      "p50WindowSpend": 88.91,
+      "p90WindowSpend": 171.87,
+      "trials": 500
+    },
+    "policy": {
+      "action": "allow",
+      "reasonCodes": [],
+      "safetyPercentileUsed": 90,
+      "requiresApproval": false
+    }
+  },
+  {
+    "eventType": "decision_check",
+    "timestampISO": "2026-03-03T00:58:08.543Z",
+    "snapshotDateISO": "2025-12-31",
+    "nextPayDateISO": "2026-01-02",
+    "intent": {
+      "intentType": "planned_purchase",
+      "cadence": "one_time",
+      "amount": 10000,
+      "horizon": {
+        "kind": "this_month"
+      }
+    },
+    "seed": 1232365455,
+    "forecast": {
+      "windowDays": 2,
+      "expectedWindowSpend": 101.28,
+      "p50WindowSpend": 92.68,
+      "p90WindowSpend": 184.22,
+      "trials": 500
+    },
+    "policy": {
+      "action": "allow",
+      "reasonCodes": [],
+      "safetyPercentileUsed": 90,
+      "requiresApproval": false
+    }
+  },
+  {
+    "eventType": "decision_check",
+    "timestampISO": "2026-03-03T00:58:21.675Z",
+    "snapshotDateISO": "2025-12-31",
+    "nextPayDateISO": "2026-01-02",
+    "intent": {
+      "intentType": "planned_purchase",
+      "cadence": "one_time",
+      "amount": 10000,
+      "horizon": {
+        "kind": "this_month"
+      }
+    },
+    "seed": 1232365455,
+    "forecast": {
+      "windowDays": 2,
+      "expectedWindowSpend": 101.28,
+      "p50WindowSpend": 92.68,
+      "p90WindowSpend": 184.22,
+      "trials": 500
+    },
+    "policy": {
+      "action": "allow",
+      "reasonCodes": [],
+      "safetyPercentileUsed": 90,
+      "requiresApproval": false
+    }
+  }
+]
